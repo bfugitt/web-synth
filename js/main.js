@@ -1126,7 +1126,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('lfo-rate').oninput = (e) => updateLFO(e.target.value, 'rate', document.getElementById('lfo-rate-val'));
     document.getElementById('lfo-wave').onchange = (e) => updateLFO(e.target.value, 'wave');
     document.getElementById('lfo-vco1-depth').oninput = (e) => updateRangeLabel(e.target, ' semitones');
-    document.getElementById('lfo-vco2-depth').oninput = (e) => updateRangeLabel(e.targe.value, ' semitones');
+    document.getElementById('lfo-vco2-depth').oninput = (e) => updateRangeLabel(e.target, ' semitones');
     
     document.getElementById('noise-level').oninput = (e) => updateRangeLabel(e.target);
 
