@@ -1,245 +1,8 @@
-// Import all our static data from the new constants.js file
+// Import all our static data from the constants.js file
 import { MIDI_NOTE_NAMES, SCALES, ARP_CHORD_INTERVALS, PATCHES } from './constants.js';
-// Use standard AudioContext for real-time play
-const AudioContext = window.AudioContext || window.webkitAudioContext;
-const audioCtx = new AudioContext();
+// Import all our "live" state variables and audio nodes
+import { audioCtx, audioNodes, state } from './state.js';
 
-// --- GLOBAL AUDIO NODES ---
-let masterGainNode;
-let synthOutputMixer; 
-let vcfNode;
-
-// --- GLOBAL DELAY NODES ---
-let delayNode;
-let feedbackGain;
-let wetGain;
-let dryGain;
-
-
-// --- LFO Global State & Nodes ---
-let realTimeLfoNode = null;
-let lfoRate = 5.0;
-let lfoWave = 'sine';
-let lfoVcfDepthParam = null; 
-
-// --- Global State ---
-let currentStep = 0;
-let isPlaying = false; 
-let sequencerInterval = null;
-
-let baseOctave = 60;
-let vco1Wave = 'sawtooth';
-let vco2Wave = 'sawtooth';
-
-// --- ARPEGGIATOR STATE ---
-let heldNotes = []; 
-let arpeggiatorInterval = null;
-let arpIndex = 0;
-
-// --- SONG STATE ---
-let songPatterns = [];
-let isSongPlaying = false;
-let currentPatternIndex = 0;
-let nextPatternToLoad = null; 
-
-
-// --- SEQUENCER CONFIGURATION ---
-// MIDI Note names for dynamic display
-const MIDI_NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-
-// Scale Definitions (Offsets from the Root - C0 in this case, but C4 for the sequence)
-const SCALES = {
-    'major': {
-        name: "Ionian (Major)",
-        offsets: [0, 2, 4, 5, 7, 9, 11, 12]
-    },
-    'dorian': {
-        name: "Dorian",
-        offsets: [0, 2, 3, 5, 7, 9, 10, 12]
-    },
-    'phrygian': {
-        name: "Phrygian",
-        offsets: [0, 1, 3, 5, 7, 8, 10, 12]
-    },
-    'lydian': {
-        name: "Lydian",
-        offsets: [0, 2, 4, 6, 7, 9, 11, 12]
-    },
-    'mixolydian': {
-        name: "Mixolydian",
-        offsets: [0, 2, 4, 5, 7, 9, 10, 12]
-    },
-    'minor': { // Aeolian
-        name: "Aeolian (Minor)",
-        offsets: [0, 2, 3, 5, 7, 8, 10, 12]
-    },
-    'locrian': {
-        name: "Locrian",
-        offsets: [0, 1, 3, 5, 6, 8, 10, 12]
-    }
-};
-
-// NEW ARP CHORD INTERVALS
-const ARP_CHORD_INTERVALS = {
-    'held_notes': null,                   // Placeholder for the classic logic (cycles all held notes)
-    'major_triad': [0, 4, 7],             // Root, Major Third, Perfect Fifth
-    'minor_triad': [0, 3, 7],             // Root, Minor Third, Perfect Fifth
-    'seventh_chord': [0, 4, 7, 10],       // Root, Major Third, Perfect Fifth, Minor Seventh (Dominant 7th)
-    'fifth_chord': [0, 7]                 // Root, Perfect Fifth (Power Chord)
-};
-
-const NUM_STEPS = 16;
-const NUM_ROWS = 8;
-let sequence = Array(NUM_ROWS).fill().map(() => Array(NUM_STEPS).fill(0));
-let currentScaleNoteNames = [];
-let currentScaleMidiNotes = [];
-
-// --- Active Voice Tracking (for note on/off) ---
-let activeVoices = {}; // Tracks { midiNote: [osc1, osc2, gainNode, ...], ... }
-
-// --- PATCH DEFINITIONS (Updated to use new ARP names) ---
-const PATCHES = {
-    default: {
-        vco1_wave: 'sawtooth',
-        vco1_range: '0',
-        vco1_fine_tune: '0.0',
-        vco1_level: '0.7',
-        vco2_wave: 'sawtooth',
-        vco2_range: '0',
-        vco2_fine_tune: '0.0',
-        vco2_level: '0.7',
-        attack: '0.05',
-        decay: '0.2',
-        sustain: '0.5',
-        release: '0.5',
-        cutoff: '10000',
-        resonance: '1.0',
-        lfo_vcf_depth: '0',
-        lfo_rate: '5.0',
-        lfo_wave: 'sine',
-        lfo_vco1_depth: '0.0',
-        lfo_vco2_depth: '0.0',
-        noise_level: '0.00',
-        delay_time: '0.5',
-        delay_feedback: '0.3',
-        delay_mix: '0.5',
-        master_volume: '0.7',
-        scale_key: 'major',
-        arp_chords: 'held_notes' // DEFAULT: Held Notes
-    },
-    bass_pluck: {
-        vco1_wave: 'square',
-        vco1_range: '12',
-        vco1_fine_tune: '0.0',
-        vco1_level: '0.9',
-        vco2_wave: 'square',
-        vco2_range: '12',
-        vco2_fine_tune: '0.05',
-        vco2_level: '0.7',
-        attack: '0.01',
-        decay: '0.3',
-        sustain: '0.0',
-        release: '0.3',
-        cutoff: '800',
-        resonance: '2.0',
-        lfo_vcf_depth: '0',
-        lfo_rate: '0.1',
-        lfo_wave: 'sine',
-        lfo_vco1_depth: '0.0',
-        lfo_vco2_depth: '0.0',
-        noise_level: '0.00',
-        delay_time: '0.01',
-        delay_feedback: '0.1',
-        delay_mix: '0.0',
-        master_volume: '0.8',
-        scale_key: 'minor',
-        arp_chords: 'held_notes'
-    },
-    arp_dream: {
-        vco1_wave: 'triangle',
-        vco1_range: '0',
-        vco1_fine_tune: '0.0',
-        vco1_level: '1.0',
-        vco2_wave: 'sine',
-        vco2_range: '-12',
-        vco2_fine_tune: '0.0',
-        vco2_level: '0.8',
-        attack: '0.2',
-        decay: '0.5',
-        sustain: '0.7',
-        release: '1.5',
-        cutoff: '8000',
-        resonance: '1.5',
-        lfo_vcf_depth: '2000',
-        lfo_rate: '0.5',
-        lfo_wave: 'sine',
-        lfo_vco1_depth: '0.1',
-        lfo_vco2_depth: '0.0',
-        noise_level: '0.00',
-        delay_time: '0.8',
-        delay_feedback: '0.6',
-        delay_mix: '0.7',
-        master_volume: '0.6',
-        scale_key: 'major',
-        arp_chords: 'seventh_chord'
-    },
-    lfo_wobble: {
-        vco1_wave: 'sawtooth',
-        vco1_range: '12',
-        vco1_fine_tune: '0.0',
-        vco1_level: '0.8',
-        vco2_wave: 'square',
-        vco2_range: '12',
-        vco2_fine_tune: '0.05',
-        vco2_level: '0.8',
-        attack: '0.1',
-        decay: '0.4',
-        sustain: '0.5',
-        release: '0.6',
-        cutoff: '12000',
-        resonance: '5.0',
-        lfo_vcf_depth: '5000',
-        lfo_rate: '8.0',
-        lfo_wave: 'square',
-        lfo_vco1_depth: '0.0',
-        lfo_vco2_depth: '0.0',
-        noise_level: '0.00',
-        delay_time: '0.01',
-        delay_feedback: '0.0',
-        delay_mix: '0.0',
-        master_volume: '0.7',
-        scale_key: 'dorian',
-        arp_chords: 'minor_triad'
-    },
-    noise_perc: {
-        vco1_wave: 'sine',
-        vco1_range: '24',
-        vco1_fine_tune: '0.0',
-        vco1_level: '0.0',
-        vco2_wave: 'sine',
-        vco2_range: '24',
-        vco2_fine_tune: '0.0',
-        vco2_level: '0.0',
-        attack: '0.01',
-        decay: '0.1',
-        sustain: '0.0',
-        release: '0.1',
-        cutoff: '15000',
-        resonance: '0.1',
-        lfo_vcf_depth: '0',
-        lfo_rate: '5.0',
-        lfo_wave: 'sine',
-        lfo_vco1_depth: '0.0',
-        lfo_vco2_depth: '0.0',
-        noise_level: '1.00',
-        delay_time: '0.01',
-        delay_feedback: '0.0',
-        delay_mix: '0.0',
-        master_volume: '0.8',
-        scale_key: 'major',
-        arp_chords: 'held_notes'
-    }
-};
 
 // --- Helper Functions ---
 function updateRangeLabel(input, unit = '') {
@@ -325,7 +88,7 @@ function getAllSynthState() {
         scale_key: document.getElementById('scale-selector').value
     };
 }
-function loadSynthControls(state) {
+function loadSynthControls(patchState) {
     const controls = [
         { id: 'vco1-wave', key: 'vco1_wave' },
         { id: 'vco1-range', key: 'vco1_range' },
@@ -360,30 +123,30 @@ function loadSynthControls(state) {
     ];
 
     controls.forEach(control => {
-        if (state[control.key] !== undefined) {
+        if (patchState[control.key] !== undefined) {
             const el = document.getElementById(control.id);
             if (el) {
-                el.value = state[control.key];
+                el.value = patchState[control.key];
             }
         }
     });
 
-    // Update global variables
-    vco1Wave = state.vco1_wave;
-    vco2Wave = state.vco2_wave;
+    // Update global state variables
+    state.vco1Wave = patchState.vco1_wave;
+    state.vco2Wave = patchState.vco2_wave;
     
     // Update dependent systems
     updateAllRangeLabels();
     updateVCF();
     updateDelay();
-    updateLFO(state.lfo_rate, 'rate');
-    updateLFO(state.lfo_wave, 'wave');
+    updateLFO(patchState.lfo_rate, 'rate');
+    updateLFO(patchState.lfo_wave, 'wave');
     initRealTimeLfo();
-    masterGainNode.gain.setValueAtTime(parseFloat(state.master_volume), audioCtx.currentTime);
+    audioNodes.masterGainNode.gain.setValueAtTime(parseFloat(patchState.master_volume), audioCtx.currentTime);
 
     // This is a key change: Loading a patch also loads its associated scale
-    if (state.scale_key) {
-        document.getElementById('scale-selector').value = state.scale_key;
+    if (patchState.scale_key) {
+        document.getElementById('scale-selector').value = patchState.scale_key;
         loadScale(); // This will redraw the grid
     }
 }
@@ -392,44 +155,44 @@ function loadSynthControls(state) {
 // --- Initialization Functions ---
 function initializeGlobalAudioChain() {
     // 1. Master Output
-    masterGainNode = audioCtx.createGain();
-    masterGainNode.gain.setValueAtTime(0.7, audioCtx.currentTime); // Default volume
+    audioNodes.masterGainNode = audioCtx.createGain();
+    audioNodes.masterGainNode.gain.setValueAtTime(0.7, audioCtx.currentTime); // Default volume
 
     // 2. Filter (VCF)
-    vcfNode = audioCtx.createBiquadFilter();
-    vcfNode.type = 'lowpass';
-    vcfNode.frequency.setValueAtTime(10000, audioCtx.currentTime);
-    vcfNode.Q.setValueAtTime(1.0, audioCtx.currentTime);
+    audioNodes.vcfNode = audioCtx.createBiquadFilter();
+    audioNodes.vcfNode.type = 'lowpass';
+    audioNodes.vcfNode.frequency.setValueAtTime(10000, audioCtx.currentTime);
+    audioNodes.vcfNode.Q.setValueAtTime(1.0, audioCtx.currentTime);
     
     // 3. Delay Effect Nodes
-    delayNode = audioCtx.createDelay(2.0); // Max 2s delay
-    feedbackGain = audioCtx.createGain();
-    wetGain = audioCtx.createGain();
-    dryGain = audioCtx.createGain();
+    audioNodes.delayNode = audioCtx.createDelay(2.0); // Max 2s delay
+    audioNodes.feedbackGain = audioCtx.createGain();
+    audioNodes.wetGain = audioCtx.createGain();
+    audioNodes.dryGain = audioCtx.createGain();
 
     // 4. Synth Output Mixer (This is where all voices will connect)
-    synthOutputMixer = audioCtx.createGain();
+    audioNodes.synthOutputMixer = audioCtx.createGain();
 
     // --- Routing ---
     // 1. All Synth Voices -> synthOutputMixer
     //    (This happens in startNote)
 
     // 2. synthOutputMixer -> VCF -> Delay Path
-    synthOutputMixer.connect(vcfNode);
+    audioNodes.synthOutputMixer.connect(audioNodes.vcfNode);
 
     // A. Delay Loop (Wet Path)
-    vcfNode.connect(delayNode);
-    delayNode.connect(feedbackGain);
-    feedbackGain.connect(delayNode);
-    delayNode.connect(wetGain);
+    audioNodes.vcfNode.connect(audioNodes.delayNode);
+    audioNodes.delayNode.connect(audioNodes.feedbackGain);
+    audioNodes.feedbackGain.connect(audioNodes.delayNode);
+    audioNodes.delayNode.connect(audioNodes.wetGain);
     
     // B. Dry Path
-    vcfNode.connect(dryGain);
+    audioNodes.vcfNode.connect(audioNodes.dryGain);
     
     // 3. Dry/Wet Mix -> Master
-    dryGain.connect(masterGainNode);
-    wetGain.connect(masterGainNode);
-    masterGainNode.connect(audioCtx.destination);
+    audioNodes.dryGain.connect(audioNodes.masterGainNode);
+    audioNodes.wetGain.connect(audioNodes.masterGainNode);
+    audioNodes.masterGainNode.connect(audioCtx.destination);
 
     updateDelay(); // Set initial delay parameters
     updateVCF(); // Initialize VCF parameters
@@ -438,8 +201,8 @@ function initializeGlobalAudioChain() {
 /** NEW FUNCTION: Updates the VCF parameters from the sliders */
 function updateVCF() {
     const time = audioCtx.currentTime;
-    vcfNode.frequency.linearRampToValueAtTime(parseFloat(document.getElementById('cutoff').value), time + 0.01);
-    vcfNode.Q.linearRampToValueAtTime(parseFloat(document.getElementById('resonance').value), time + 0.01);
+    audioNodes.vcfNode.frequency.linearRampToValueAtTime(parseFloat(document.getElementById('cutoff').value), time + 0.01);
+    audioNodes.vcfNode.Q.linearRampToValueAtTime(parseFloat(document.getElementById('resonance').value), time + 0.01);
 }
 
 function updateDelay() {
@@ -449,10 +212,10 @@ function updateDelay() {
     const currentTime = audioCtx.currentTime;
 
     // Use linearRampToValueAtTime for smoother, click-free parameter changes
-    delayNode.delayTime.linearRampToValueAtTime(time, currentTime + 0.01);
-    feedbackGain.gain.linearRampToValueAtTime(feedback, currentTime + 0.01);
-    dryGain.gain.linearRampToValueAtTime(1.0 - mix, currentTime + 0.01);
-    wetGain.gain.linearRampToValueAtTime(mix, currentTime + 0.01);
+    audioNodes.delayNode.delayTime.linearRampToValueAtTime(time, currentTime + 0.01);
+    audioNodes.feedbackGain.gain.linearRampToValueAtTime(feedback, currentTime + 0.01);
+    audioNodes.dryGain.gain.linearRampToValueAtTime(1.0 - mix, currentTime + 0.01);
+    audioNodes.wetGain.gain.linearRampToValueAtTime(mix, currentTime + 0.01);
 }
 
 function createLfoNode(context, rate, wave, startTime) {
@@ -463,45 +226,45 @@ function createLfoNode(context, rate, wave, startTime) {
 }
 
 function initRealTimeLfo() {
-    if (realTimeLfoNode) {
+    if (audioNodes.realTimeLfoNode) {
         try {
-            realTimeLfoNode.stop();
+            audioNodes.realTimeLfoNode.stop();
         } catch (e) {
             // node might already be stopped
         }
     }
     
-    lfoRate = parseFloat(document.getElementById('lfo-rate').value);
-    lfoWave = document.getElementById('lfo-wave').value;
+    state.lfoRate = parseFloat(document.getElementById('lfo-rate').value);
+    state.lfoWave = document.getElementById('lfo-wave').value;
     const lfoVcfDepth = parseFloat(document.getElementById('lfo-vcf-depth').value);
 
     if (lfoVcfDepth > 0) {
-        realTimeLfoNode = createLfoNode(audioCtx, lfoRate, lfoWave, audioCtx.currentTime);
+        audioNodes.realTimeLfoNode = createLfoNode(audioCtx, state.lfoRate, state.lfoWave, audioCtx.currentTime);
         
         // This is the GainNode that controls the *depth* of the LFO
-        lfoVcfDepthParam = audioCtx.createGain();
-        lfoVcfDepthParam.gain.setValueAtTime(lfoVcfDepth, audioCtx.currentTime);
+        audioNodes.lfoVcfDepthParam = audioCtx.createGain();
+        audioNodes.lfoVcfDepthParam.gain.setValueAtTime(lfoVcfDepth, audioCtx.currentTime);
         
         // LFO -> Depth Control -> VCF Frequency
-        realTimeLfoNode.connect(lfoVcfDepthParam);
-        lfoVcfDepthParam.connect(vcfNode.frequency);
+        audioNodes.realTimeLfoNode.connect(audioNodes.lfoVcfDepthParam);
+        audioNodes.lfoVcfDepthParam.connect(audioNodes.vcfNode.frequency);
         
-        realTimeLfoNode.start(audioCtx.currentTime);
+        audioNodes.realTimeLfoNode.start(audioCtx.currentTime);
     }
 }
 
 // LFO Parameter Update (called by sliders)
 function updateLFO(value, param, valEl = null) {
     if (param === 'rate') {
-        lfoRate = parseFloat(value);
-        if (realTimeLfoNode) {
-            realTimeLfoNode.frequency.linearRampToValueAtTime(lfoRate, audioCtx.currentTime + 0.01);
+        state.lfoRate = parseFloat(value);
+        if (audioNodes.realTimeLfoNode) {
+            audioNodes.realTimeLfoNode.frequency.linearRampToValueAtTime(state.lfoRate, audioCtx.currentTime + 0.01);
         }
-        if (valEl) valEl.textContent = lfoRate.toFixed(2) + ' Hz';
+        if (valEl) valEl.textContent = state.lfoRate.toFixed(2) + ' Hz';
     } else if (param === 'wave') {
-        lfoWave = value;
-        if (realTimeLfoNode) {
-            realTimeLfoNode.type = lfoWave;
+        state.lfoWave = value;
+        if (audioNodes.realTimeLfoNode) {
+            audioNodes.realTimeLfoNode.type = state.lfoWave;
         }
     }
     // Re-init LFO if VCF depth is on, to apply wave changes
@@ -514,7 +277,7 @@ function updateLFO(value, param, valEl = null) {
 // --- Core Audio Engine ---
 function startNote(midiNote) {
     // Stop any existing note at this pitch
-    while (activeVoices[midiNote] && activeVoices[midiNote].length > 0) {
+    while (state.activeVoices[midiNote] && state.activeVoices[midiNote].length > 0) {
         stopNote(midiNote, true); 
     }
     
@@ -543,7 +306,7 @@ function startNote(midiNote) {
     noteGain.gain.setTargetAtTime(sustain, startTime + attack + decay, decay * 0.2); // 0.2 is time constant
     
     // Connect this note's output to the main synth mixer
-    noteGain.connect(synthOutputMixer);
+    noteGain.connect(audioNodes.synthOutputMixer);
 
     // --- Voice Output Mixer ---
     // We mix VCOs and Noise *before* the ADSR gain, so they all share one envelope
@@ -555,7 +318,7 @@ function startNote(midiNote) {
     // --- VCO 1 ---
     if (vco1Level > 0) {
         const vco1Node = audioCtx.createOscillator();
-        vco1Node.type = vco1Wave;
+        vco1Node.type = state.vco1Wave;
         const vco1FinalFreq = freq * Math.pow(2, (tune1.range + tune1.fineTune) / 12);
         vco1Node.frequency.setValueAtTime(vco1FinalFreq, startTime);
         
@@ -567,7 +330,7 @@ function startNote(midiNote) {
         
         // VCO 1 LFO Pitch Mod
         if (lfoVco1Depth > 0) {
-            const lfo1 = createLfoNode(audioCtx, lfoRate, lfoWave, startTime);
+            const lfo1 = createLfoNode(audioCtx, state.lfoRate, state.lfoWave, startTime);
             const lfo1Gain = audioCtx.createGain();
             lfo1Gain.gain.setValueAtTime(lfoVco1Depth, startTime);
             lfo1.connect(lfo1Gain);
@@ -583,7 +346,7 @@ function startNote(midiNote) {
     // --- VCO 2 ---
     if (vco2Level > 0) {
         const vco2Node = audioCtx.createOscillator();
-        vco2Node.type = vco2Wave;
+        vco2Node.type = state.vco2Wave;
         const vco2FinalFreq = freq * Math.pow(2, (tune2.range + tune2.fineTune) / 12);
         vco2Node.frequency.setValueAtTime(vco2FinalFreq, startTime);
         
@@ -595,7 +358,7 @@ function startNote(midiNote) {
 
         // VCO 2 LFO Pitch Mod
         if (lfoVco2Depth > 0) {
-            const lfo2 = createLfoNode(audioCtx, lfoRate, lfoWave, startTime);
+            const lfo2 = createLfoNode(audioCtx, state.lfoRate, state.lfoWave, startTime);
             const lfo2Gain = audioCtx.createGain();
             lfo2Gain.gain.setValueAtTime(lfoVco2Depth, startTime);
             lfo2.connect(lfo2Gain);
@@ -632,21 +395,21 @@ function startNote(midiNote) {
     }
 
     // Store all created nodes for this voice
-    if (!activeVoices[midiNote]) {
-        activeVoices[midiNote] = [];
+    if (!state.activeVoices[midiNote]) {
+        state.activeVoices[midiNote] = [];
     }
-    activeVoices[midiNote].push(voiceNodes);
+    state.activeVoices[midiNote].push(voiceNodes);
 }
 
 function stopNote(midiNote, immediate = false) {
-    if (!activeVoices[midiNote] || activeVoices[midiNote].length === 0) {
+    if (!state.activeVoices[midiNote] || state.activeVoices[midiNote].length === 0) {
         return;
     }
 
     const { release } = getAdsr();
     const stopTime = audioCtx.currentTime;
     
-    const voiceNodes = activeVoices[midiNote].shift(); // Get the oldest voice for this note
+    const voiceNodes = state.activeVoices[midiNote].shift(); // Get the oldest voice for this note
     const noteGain = voiceNodes[0]; // The ADSR GainNode
 
     if (immediate) {
@@ -685,18 +448,18 @@ function stopNote(midiNote, immediate = false) {
 
 // --- Keyboard and Arp Interaction ---
 function updateHeldNotes(midiNote, isAdding) {
-    const index = heldNotes.indexOf(midiNote);
+    const index = state.heldNotes.indexOf(midiNote);
     if (isAdding && index === -1) {
-        heldNotes.push(midiNote);
+        state.heldNotes.push(midiNote);
     } else if (!isAdding && index > -1) {
-        heldNotes.splice(index, 1);
+        state.heldNotes.splice(index, 1);
     }
-    heldNotes.sort((a, b) => a - b); // Keep notes sorted
+    state.heldNotes.sort((a, b) => a - b); // Keep notes sorted
 
     // Start/Stop Arpeggiator
     const arpMode = document.getElementById('arp-mode').value;
-    if (arpMode !== 'off' && !isPlaying) {
-        if (heldNotes.length > 0) {
+    if (arpMode !== 'off' && !state.isPlaying) {
+        if (state.heldNotes.length > 0) {
             startArpeggiator();
         } else {
             stopArpeggiator();
@@ -706,7 +469,7 @@ function updateHeldNotes(midiNote, isAdding) {
 
 function noteOn(midiNote) {
     // If sequencer is playing, don't allow keyboard input
-    if (isPlaying) return;
+    if (state.isPlaying) return;
     
     const arpMode = document.getElementById('arp-mode').value;
     if (arpMode === 'off') {
@@ -817,53 +580,53 @@ function runArpStep() {
     const noteDurationSec = (60.0 / bpm / 4) / rateFactor; // 1/16th divided by rate
     const noteDurationMs = noteDurationSec * 1000;
     
-    if (mode === 'off' || heldNotes.length === 0 || isPlaying) {
+    if (mode === 'off' || state.heldNotes.length === 0 || state.isPlaying) {
         stopArpeggiator();
         return;
     }
 
     // Stop previous note if it's still playing (Monophonic ARP)
-    Object.keys(activeVoices).forEach(note => {
-        while (activeVoices[note] && activeVoices[note].length > 0) {
+    Object.keys(state.activeVoices).forEach(note => {
+        while (state.activeVoices[note] && state.activeVoices[note].length > 0) {
             stopNote(parseInt(note));
         }
     });
 
     const { octaves, chordSequence } = getArpParams();
     // Calculate the note based on the specific logic
-    const noteToPlay = calculateArpNote(heldNotes, arpIndex, mode, octaves, chordSequence);
+    const noteToPlay = calculateArpNote(state.heldNotes, state.arpIndex, mode, octaves, chordSequence);
 
     if (noteToPlay !== null) {
         startNote(noteToPlay);
         setTimeout(() => stopNote(noteToPlay), noteDurationMs * 0.9);
     }
     
-    arpIndex++;
+    state.arpIndex++;
 }
 
 function startArpeggiator() {
     stopArpeggiator();
     const { mode, rateFactor } = getArpParams();
     
-    if (mode === 'off' || heldNotes.length === 0 || isPlaying) {
+    if (mode === 'off' || state.heldNotes.length === 0 || state.isPlaying) {
         return;
     }
 
     const bpm = parseInt(document.getElementById('bpm-input').value) || 120;
     const intervalTimeMs = (60 / bpm / 4) * 1000 / rateFactor; // 1/16th time / rate
     
-    arpIndex = 0;
-    arpeggiatorInterval = setInterval(runArpStep, intervalTimeMs);
+    state.arpIndex = 0;
+    state.arpeggiatorInterval = setInterval(runArpStep, intervalTimeMs);
     runArpStep(); // Play the first note immediately
 }
 
 function stopArpeggiator() {
-    clearInterval(arpeggiatorInterval);
-    arpeggiatorInterval = null;
-    arpIndex = 0;
+    clearInterval(state.arpeggiatorInterval);
+    state.arpeggiatorInterval = null;
+    state.arpIndex = 0;
     // Stop any lingering notes
-    Object.keys(activeVoices).forEach(note => {
-        while (activeVoices[note] && activeVoices[note].length > 0) {
+    Object.keys(state.activeVoices).forEach(note => {
+        while (state.activeVoices[note] && state.activeVoices[note].length > 0) {
             stopNote(parseInt(note));
         }
     });
@@ -872,7 +635,7 @@ function stopArpeggiator() {
 
 // --- Keyboard UI Functions ---
 function updateBaseOctave(value) {
-    baseOctave = parseInt(value);
+    state.baseOctave = parseInt(value);
     createPianoKeys();
 }
 
@@ -881,19 +644,19 @@ function createPianoKeys() {
     pianoKeys.innerHTML = '';
     
     const keys = [
-        { note: 'C', midi: baseOctave, class: 'white', key: 'A' },
-        { note: 'C#', midi: baseOctave + 1, class: 'black', key: 'W' },
-        { note: 'D', midi: baseOctave + 2, class: 'white', key: 'S' },
-        { note: 'D#', midi: baseOctave + 3, class: 'black', key: 'E' },
-        { note: 'E', midi: baseOctave + 4, class: 'white', key: 'D' },
-        { note: 'F', midi: baseOctave + 5, class: 'white', key: 'F' },
-        { note: 'F#', midi: baseOctave + 6, class: 'black', key: 'T' },
-        { note: 'G', midi: baseOctave + 7, class: 'white', key: 'G' },
-        { note: 'G#', midi: baseOctave + 8, class: 'black', key: 'Y' },
-        { note: 'A', midi: baseOctave + 9, class: 'white', key: 'H' },
-        { note: 'A#', midi: baseOctave + 10, class: 'black', key: 'U' },
-        { note: 'B', midi: baseOctave + 11, class: 'white', key: 'J' },
-        { note: 'C+', midi: baseOctave + 12, class: 'white', key: 'K' }
+        { note: 'C', midi: state.baseOctave, class: 'white', key: 'A' },
+        { note: 'C#', midi: state.baseOctave + 1, class: 'black', key: 'W' },
+        { note: 'D', midi: state.baseOctave + 2, class: 'white', key: 'S' },
+        { note: 'D#', midi: state.baseOctave + 3, class: 'black', key: 'E' },
+        { note: 'E', midi: state.baseOctave + 4, class: 'white', key: 'D' },
+        { note: 'F', midi: state.baseOctave + 5, class: 'white', key: 'F' },
+        { note: 'F#', midi: state.baseOctave + 6, class: 'black', key: 'T' },
+        { note: 'G', midi: state.baseOctave + 7, class: 'white', key: 'G' },
+        { note: 'G#', midi: state.baseOctave + 8, class: 'black', key: 'Y' },
+        { note: 'A', midi: state.baseOctave + 9, class: 'white', key: 'H' },
+        { note: 'A#', midi: state.baseOctave + 10, class: 'black', key: 'U' },
+        { note: 'B', midi: state.baseOctave + 11, class: 'white', key: 'J' },
+        { note: 'C+', midi: state.baseOctave + 12, class: 'white', key: 'K' }
     ];
 
     keys.forEach(keyData => {
@@ -935,7 +698,7 @@ function createPianoKeys() {
 // PC Keyboard mapping
 const keyToMidi = {};
 function setupKeyMappings() {
-    const base = () => baseOctave;
+    const base = () => state.baseOctave;
     const mappings = {
         'A': () => base(), 'W': () => base() + 1, 'S': () => base() + 2, 'E': () => base() + 3,
         'D': () => base() + 4, 'F': () => base() + 5, 'T': () => base() + 6, 'G': () => base() + 7,
@@ -1025,25 +788,26 @@ async function startRecording() {
     
     let totalTimeSec = 0;
     let patternsToRecord = [];
-    const fileNamePrefix = isSongPlaying ? 'Song' : 'Pattern';
+    const fileNamePrefix = state.isSongPlaying ? 'Song' : 'Pattern';
 
     try {
         // 1. Determine what to record (Song or Current Pattern)
-        if (isSongPlaying) {
+        if (state.isSongPlaying) {
             alert("Recording a song will stop playback. The recording will begin immediately.");
             stopSong();
-            patternsToRecord = songPatterns;
+            patternsToRecord = state.songPatterns;
         } else {
             // If no song, record the current sequence as a single pattern loop
             const currentPattern = {
                 name: "Current Pattern",
                 state: getAllSynthState(),
-                sequence: sequence.map(row => [...row])
+                sequence: state.sequence.map(row => [...row])
             };
             patternsToRecord.push(currentPattern);
         }
         
         // 2. Calculate total duration and timing properties for each pattern
+        const NUM_STEPS = 16; // We'll move this to constants later
         patternsToRecord.forEach(pattern => {
             const bpm = parseInt(pattern.state.bpm) || 120;
             const timePerStepSec = (60 / bpm) / 4;
@@ -1084,26 +848,26 @@ async function startRecording() {
         let currentTime = 0;
 
         // This function creates a single voice in the *offline* context
-        const createOfflineVoice = (context, state, midiNote, startTime, duration, destination) => {
+        const createOfflineVoice = (context, patchState, midiNote, startTime, duration, destination) => {
             const freq = midiToFreq(midiNote);
-            const { attack, decay, sustain } = state; // ADSR from pattern state
+            const { attack, decay, sustain } = patchState; // ADSR from pattern state
             
             // Get VCO settings from state
-            const tune1Range = parseInt(state.vco1_range);
-            const tune1Fine = parseFloat(state.vco1_fine_tune);
-            const tune2Range = parseInt(state.vco2_range);
-            const tune2Fine = parseFloat(state.vco2_fine_tune);
-            const vco1Level = parseFloat(state.vco1_level);
-            const vco2Level = parseFloat(state.vco2_level);
+            const tune1Range = parseInt(patchState.vco1_range);
+            const tune1Fine = parseFloat(patchState.vco1_fine_tune);
+            const tune2Range = parseInt(patchState.vco2_range);
+            const tune2Fine = parseFloat(patchState.vco2_fine_tune);
+            const vco1Level = parseFloat(patchState.vco1_level);
+            const vco2Level = parseFloat(patchState.vco2_level);
             
             // Noise from state
-            const noiseLevel = parseFloat(state.noise_level);
+            const noiseLevel = parseFloat(patchState.noise_level);
             
             // LFO settings from state
-            const lfoRate = parseFloat(state.lfo_rate);
-            const lfoWave = state.lfo_wave;
-            const lfoVco1Depth = parseFloat(state.lfo_vco1_depth) * 100;
-            const lfoVco2Depth = parseFloat(state.lfo_vco2_depth) * 100;
+            const lfoRate = parseFloat(patchState.lfo_rate);
+            const lfoWave = patchState.lfo_wave;
+            const lfoVco1Depth = parseFloat(patchState.lfo_vco1_depth) * 100;
+            const lfoVco2Depth = parseFloat(patchState.lfo_vco2_depth) * 100;
             
             const needsLfo = lfoVco1Depth > 0 || lfoVco2Depth > 0;
             const lfoNode = needsLfo ? createLfoNode(context, lfoRate, lfoWave, startTime) : null;
@@ -1121,7 +885,7 @@ async function startRecording() {
             // --- VCO 1 ---
             if (vco1Level > 0) {
                 const vco1Node = context.createOscillator();
-                vco1Node.type = state.vco1_wave;
+                vco1Node.type = patchState.vco1_wave;
                 const vco1FinalFreq = freq * Math.pow(2, (tune1Range + tune1Fine) / 12);
                 vco1Node.frequency.setValueAtTime(vco1FinalFreq, startTime);
                 const vco1Gain = context.createGain();
@@ -1136,13 +900,13 @@ async function startRecording() {
                     lfo1Gain.connect(vco1Node.detune);
                 }
                 vco1Node.start(startTime);
-                vco1Node.stop(startTime + duration + parseFloat(state.release) + 0.01);
+                vco1Node.stop(startTime + duration + parseFloat(patchState.release) + 0.01);
             }
 
             // --- VCO 2 ---
             if (vco2Level > 0) {
                 const vco2Node = context.createOscillator();
-                vco2Node.type = state.vco2_wave;
+                vco2Node.type = patchState.vco2_wave;
                 const vco2FinalFreq = freq * Math.pow(2, (tune2Range + tune2Fine) / 12);
                 vco2Node.frequency.setValueAtTime(vco2FinalFreq, startTime);
                 const vco2Gain = context.createGain();
@@ -1157,7 +921,7 @@ async function startRecording() {
                     lfo2Gain.connect(vco2Node.detune);
                 }
                 vco2Node.start(startTime);
-                vco2Node.stop(startTime + duration + parseFloat(state.release) + 0.01);
+                vco2Node.stop(startTime + duration + parseFloat(patchState.release) + 0.01);
             }
             
             // --- Noise Generator ---
@@ -1176,14 +940,14 @@ async function startRecording() {
                 noiseNode.connect(noiseGain);
                 noiseGain.connect(voiceMixer); // Connect noise to voice mixer
                 noiseNode.start(startTime);
-                noiseNode.stop(startTime + duration + parseFloat(state.release) + 0.01);
+                noiseNode.stop(startTime + duration + parseFloat(patchState.release) + 0.01);
             }
             
             voiceMixer.connect(noteGain); // Voice mixer feeds into ADSR
             noteGain.connect(destination); // ADSR feeds into synth's main mixer
             
             // Stop logic for the voice in the offline context
-            const releaseTime = parseFloat(state.release);
+            const releaseTime = parseFloat(patchState.release);
             noteGain.gain.cancelScheduledValues(startTime + duration);
             noteGain.gain.setTargetAtTime(0, startTime + duration, releaseTime * 0.2);
             
@@ -1193,25 +957,27 @@ async function startRecording() {
         };
 
         // --- 4. Scheduling Loop (Iterate through patterns) ---
+        const NUM_STEPS = 16;
+        const NUM_ROWS = 8;
         for (const pattern of patternsToRecord) {
-            const state = pattern.state;
+            const patchState = pattern.state;
             const sequenceToRender = pattern.sequence;
             const timePerStepSec = pattern.timePerStepSec;
             const duration = pattern.duration;
             
             // Retrieve scale for this pattern (NEW)
-            const scaleKey = state.scale_key || 'major';
+            const scaleKey = patchState.scale_key || 'major';
             const scaleOffsets = SCALES[scaleKey].offsets;
             const offlineScaleNotes = scaleOffsets.slice(0, NUM_ROWS)
-                .map(offset => (baseOctave + offset))
+                .map(offset => (parseInt(patchState.baseOctave) || state.baseOctave) + offset) // Use pattern's octave
                 .reverse(); // Match grid (top = high)
             
             // Apply pattern state to global offline nodes
-            masterGainNodeOffline.gain.linearRampToValueAtTime(parseFloat(state.master_volume), currentTime + 0.01);
+            masterGainNodeOffline.gain.linearRampToValueAtTime(parseFloat(patchState.master_volume), currentTime + 0.01);
             
             // Apply VCF to offline context
-            const cutoff = parseFloat(state.cutoff);
-            const resonance = parseFloat(state.resonance);
+            const cutoff = parseFloat(patchState.cutoff);
+            const resonance = parseFloat(patchState.resonance);
             vcfNodeOffline.frequency.linearRampToValueAtTime(cutoff, currentTime + 0.01);
             vcfNodeOffline.Q.linearRampToValueAtTime(resonance, currentTime + 0.01);
             
@@ -1224,7 +990,7 @@ async function startRecording() {
                         const midiNote = offlineScaleNotes[row];
                         const noteDuration = timePerStepSec * 0.9; // 90% gate
                         
-                        createOfflineVoice(offlineCtx, state, midiNote, stepTime, noteDuration, synthOutputMixerOffline);
+                        createOfflineVoice(offlineCtx, patchState, midiNote, stepTime, noteDuration, synthOutputMixerOffline);
                     }
                 }
             }
@@ -1264,9 +1030,11 @@ function createGrid() {
     const sequencerGrid = document.getElementById('sequencer-grid');
     sequencerGrid.innerHTML = ''; 
 
+    const NUM_ROWS = 8;
+    const NUM_STEPS = 16;
     for (let row = 0; row < NUM_ROWS; row++) {
         // The note name is fetched dynamically based on the current scale
-        const name = currentScaleNoteNames[row];
+        const name = state.currentScaleNoteNames[row];
         const label = document.createElement('div');
         label.className = 'note-label';
         label.textContent = name;
@@ -1277,11 +1045,11 @@ function createGrid() {
             stepEl.className = 'step';
             stepEl.dataset.row = row;
             stepEl.dataset.step = step;
-            if (sequence[row][step]) {
+            if (state.sequence[row][step]) {
                 stepEl.classList.add('on');
             }
             stepEl.onclick = () => {
-                sequence[row][step] = 1 - sequence[row][step]; // Toggle 0/1
+                state.sequence[row][step] = 1 - state.sequence[row][step]; // Toggle 0/1
                 stepEl.classList.toggle('on');
             };
             sequencerGrid.appendChild(stepEl);
@@ -1290,7 +1058,9 @@ function createGrid() {
 }
 
 function clearGrid() {
-    sequence = Array(NUM_ROWS).fill().map(() => Array(NUM_STEPS).fill(0));
+    const NUM_ROWS = 8;
+    const NUM_STEPS = 16;
+    state.sequence = Array(NUM_ROWS).fill().map(() => Array(NUM_STEPS).fill(0));
     createGrid(); // Redraw the cleared grid
 }
 
@@ -1299,14 +1069,15 @@ function loadScale() {
     const scale = SCALES[scaleKey];
     if (!scale) return;
 
+    const NUM_ROWS = 8;
     // Get the 8 scale degrees (e.g., [0, 2, 4, 5, 7, 9, 11, 12])
     const offsets = scale.offsets.slice(0, NUM_ROWS);
     
-    // Calculate MIDI notes (C4 = 60)
-    currentScaleMidiNotes = offsets.map(offset => baseOctave + offset).reverse(); // Reverse so row 0 is highest pitch
+    // Calculate MIDI notes (C4 = 60, or current baseOctave)
+    state.currentScaleMidiNotes = offsets.map(offset => state.baseOctave + offset).reverse(); // Reverse so row 0 is highest pitch
     
     // Get note names
-    currentScaleNoteNames = currentScaleMidiNotes.map(midi => {
+    state.currentScaleNoteNames = state.currentScaleMidiNotes.map(midi => {
         const noteIndex = midi % 12;
         const octave = Math.floor(midi / 12) - 1; // MIDI C4 is Octave 4
         return `${MIDI_NOTE_NAMES[noteIndex]}${octave}`;
@@ -1318,38 +1089,41 @@ function loadScale() {
 }
 
 function runStep() {
+    const NUM_STEPS = 16;
+    const NUM_ROWS = 8;
+    
     // 1. Check for Song Pattern Change (if playing song)
-    if (isSongPlaying && currentStep === 0 && nextPatternToLoad) {
+    if (state.isSongPlaying && state.currentStep === 0 && state.nextPatternToLoad) {
         // Load the new pattern's state and sequence
-        loadSynthControls(nextPatternToLoad.state);
-        sequence = nextPatternToLoad.sequence.map(row => [...row]);
+        loadSynthControls(state.nextPatternToLoad.state);
+        state.sequence = state.nextPatternToLoad.sequence.map(row => [...row]);
         createGrid(); // Redraw grid with new pattern
         
         // Update BPM
-        const newBpm = parseInt(nextPatternToLoad.state.bpm) || 120;
+        const newBpm = parseInt(state.nextPatternToLoad.state.bpm) || 120;
         document.getElementById('bpm-input').value = newBpm;
         
         // This is critical: restart the sequencer interval with the new BPM
         // We stop the current one and the startSequencer function (called from startStopSong) will create the new one
-        clearInterval(sequencerInterval);
+        clearInterval(state.sequencerInterval);
         startSequencer(true); // Call with 'isSongContinue' flag
         
-        nextPatternToLoad = null; // Clear the flag
+        state.nextPatternToLoad = null; // Clear the flag
         return; // Exit this step; the new interval will pick up
     }
     
     // 2. Stop notes from the *previous* step
-    const prevStep = (currentStep - 1 + NUM_STEPS) % NUM_STEPS;
+    const prevStep = (state.currentStep - 1 + NUM_STEPS) % NUM_STEPS;
     for (let row = 0; row < NUM_ROWS; row++) {
-        if (sequence[row][prevStep]) {
-            const midiNote = currentScaleMidiNotes[row];
+        if (state.sequence[row][prevStep]) {
+            const midiNote = state.currentScaleMidiNotes[row];
             stopNote(midiNote);
         }
     }
 
     // 3. Highlight current step
     document.querySelectorAll('.step.current').forEach(el => el.classList.remove('current'));
-    const currentStepEls = document.querySelectorAll(`.step[data-step="${currentStep}"]`);
+    const currentStepEls = document.querySelectorAll(`.step[data-step="${state.currentStep}"]`);
     currentStepEls.forEach(el => el.classList.add('current'));
 
     // 4. Play notes for the *current* step
@@ -1360,8 +1134,8 @@ function runStep() {
     const { mode: arpMode } = getArpParams();
     let notesToArp = [];
     for (let row = 0; row < NUM_ROWS; row++) {
-        if (sequence[row][currentStep]) {
-            const midiNote = currentScaleMidiNotes[row];
+        if (state.sequence[row][state.currentStep]) {
+            const midiNote = state.currentScaleMidiNotes[row];
             notesToArp.push(midiNote);
         }
     }
@@ -1386,15 +1160,15 @@ function runStep() {
             // This timeout schedules all arp notes *within* the current step
             setTimeout(() => {
                 // Stop previous arp note (monophonic)
-                Object.keys(activeVoices).forEach(note => {
-                    while (activeVoices[note] && activeVoices[note].length > 0) {
+                Object.keys(state.activeVoices).forEach(note => {
+                    while (state.activeVoices[note] && state.activeVoices[note].length > 0) {
                         stopNote(parseInt(note));
                     }
                 });
                 
                 // Calculate which arp note to play
                 // We use a "total" index to keep the arp running smoothly
-                const totalArpIndex = (currentStep * numArpNotesPerStep) + i; 
+                const totalArpIndex = (state.currentStep * numArpNotesPerStep) + i; 
                 const noteToPlay = calculateArpNote(notesToArp, totalArpIndex, mode, octaves, chordSequence);
                 
                 if (noteToPlay !== null) {
@@ -1406,30 +1180,30 @@ function runStep() {
     }
 
     // 6. Advance step (and handle song looping)
-    currentStep = (currentStep + 1) % NUM_STEPS;
+    state.currentStep = (state.currentStep + 1) % NUM_STEPS;
     
-    if (isSongPlaying && currentStep === 0) {
+    if (state.isSongPlaying && state.currentStep === 0) {
         // We are at the end of a pattern, advance the song
         advanceSongPattern();
     }
 }
 
 function startSequencer(isSongContinue = false) {
-    if (isPlaying && !isSongContinue) return; // Don't restart if already playing (unless it's a song continue)
+    if (state.isPlaying && !isSongContinue) return; // Don't restart if already playing (unless it's a song continue)
     
     // When starting, stop any held arpeggiator notes
     stopArpeggiator();
     
-    isPlaying = true;
+    state.isPlaying = true;
     if (!isSongContinue) {
-        currentStep = 0; // Reset step only if it's a fresh play
+        state.currentStep = 0; // Reset step only if it's a fresh play
     }
     
     const bpm = parseInt(document.getElementById('bpm-input').value) || 120;
     const intervalTimeMs = (60 / bpm / 4) * 1000; // 1/16th note interval
     
-    clearInterval(sequencerInterval); // Clear any existing interval
-    sequencerInterval = setInterval(runStep, intervalTimeMs);
+    clearInterval(state.sequencerInterval); // Clear any existing interval
+    state.sequencerInterval = setInterval(runStep, intervalTimeMs);
     
     document.getElementById('play-btn').textContent = 'PAUSE';
     
@@ -1440,27 +1214,27 @@ function startSequencer(isSongContinue = false) {
 }
 
 function startStopSequencer() {
-    if (isSongPlaying) {
+    if (state.isSongPlaying) {
         alert("Please stop SONG mode to use the sequencer manually.");
         return;
     }
 
-    if (isPlaying) {
+    if (state.isPlaying) {
         // --- PAUSE ---
-        isPlaying = false;
-        clearInterval(sequencerInterval);
+        state.isPlaying = false;
+        clearInterval(state.sequencerInterval);
         document.getElementById('play-btn').textContent = 'PLAY';
         
         // Stop all sounding notes
-        Object.keys(activeVoices).forEach(note => {
-            while(activeVoices[note] && activeVoices[note].length > 0) {
+        Object.keys(state.activeVoices).forEach(note => {
+            while(state.activeVoices[note] && state.activeVoices[note].length > 0) {
                 stopNote(parseInt(note));
             }
         });
         document.querySelectorAll('.step.current').forEach(el => el.classList.remove('current'));
         
         // Restart arpeggiator if notes are held
-        if (heldNotes.length > 0 && document.getElementById('arp-mode').value !== 'off') {
+        if (state.heldNotes.length > 0 && document.getElementById('arp-mode').value !== 'off') {
             startArpeggiator();
         }
 
@@ -1471,27 +1245,27 @@ function startStopSequencer() {
 }
 
 function stopSequencer() {
-    isPlaying = false;
-    clearInterval(sequencerInterval);
+    state.isPlaying = false;
+    clearInterval(state.sequencerInterval);
     document.getElementById('play-btn').textContent = 'PLAY';
     document.querySelectorAll('.step.current').forEach(el => el.classList.remove('current'));
     
-    Object.keys(activeVoices).forEach(note => {
-        while(activeVoices[note] && activeVoices[note].length > 0) {
+    Object.keys(state.activeVoices).forEach(note => {
+        while(state.activeVoices[note] && state.activeVoices[note].length > 0) {
             stopNote(parseInt(note));
         }
     });
     
     // Reset step counter
-    currentStep = 0;
+    state.currentStep = 0;
     
     // If song was playing, stop that too
-    if (isSongPlaying) {
+    if (state.isSongPlaying) {
         stopSong();
     }
     
     // Restart arpeggiator if notes are held
-    if (heldNotes.length > 0 && document.getElementById('arp-mode').value !== 'off') {
+    if (state.heldNotes.length > 0 && document.getElementById('arp-mode').value !== 'off') {
         startArpeggiator();
     }
 }
@@ -1500,13 +1274,13 @@ function stopSequencer() {
 // --- Song/Pattern Functions ---
 function savePattern() {
     const pattern = {
-        name: `Pattern ${String.fromCharCode(65 + songPatterns.length)}`,
+        name: `Pattern ${String.fromCharCode(65 + state.songPatterns.length)}`,
         state: getAllSynthState(),
-        sequence: sequence.map(row => [...row]) // Deep copy
+        sequence: state.sequence.map(row => [...row]) // Deep copy
     };
-    songPatterns.push(pattern);
+    state.songPatterns.push(pattern);
     
-    document.getElementById('save-pattern-btn').textContent = `SAVE PATTERN ${String.fromCharCode(65 + songPatterns.length)}`;
+    document.getElementById('save-pattern-btn').textContent = `SAVE PATTERN ${String.fromCharCode(65 + state.songPatterns.length)}`;
     updatePatternDisplay();
 }
 
@@ -1514,24 +1288,24 @@ function updatePatternDisplay() {
     const displayEl = document.getElementById('pattern-display');
     displayEl.innerHTML = '';
     
-    if (songPatterns.length === 0) {
+    if (state.songPatterns.length === 0) {
         displayEl.innerHTML = '<p style="margin: 0; color: #aaa;">Saved Patterns: None</p>';
         return;
     }
     
-    songPatterns.forEach((pattern, index) => {
+    state.songPatterns.forEach((pattern, index) => {
         const tile = document.createElement('div');
         tile.className = 'pattern-tile';
         const scaleName = SCALES[pattern.state.scale_key]?.name || 'Unknown';
         tile.textContent = `${pattern.name} (${scaleName})`;
         tile.dataset.index = index;
 
-        if (isSongPlaying && index === currentPatternIndex) {
+        if (state.isSongPlaying && index === state.currentPatternIndex) {
             tile.classList.add('playing');
         }
 
         tile.onclick = () => {
-            if (isPlaying) {
+            if (state.isPlaying) {
                 stopSequencer();
             }
             loadPattern(index);
@@ -1551,85 +1325,85 @@ function updatePatternDisplay() {
 }
 
 function deletePattern(index) {
-    if (isSongPlaying) {
+    if (state.isSongPlaying) {
         alert("Cannot delete patterns while Song Play is active. Please stop the song first.");
         return;
     }
     
-    if (confirm(`Are you sure you want to delete ${songPatterns[index].name}?`)) {
-        songPatterns.splice(index, 1);
+    if (confirm(`Are you sure you want to delete ${state.songPatterns[index].name}?`)) {
+        state.songPatterns.splice(index, 1);
         
         // Re-name subsequent patterns
-        songPatterns.forEach((p, i) => {
+        state.songPatterns.forEach((p, i) => {
             if (i >= index) {
                 p.name = `Pattern ${String.fromCharCode(65 + i)}`;
             }
         });
 
-        if (index === currentPatternIndex && songPatterns.length > 0) {
-            currentPatternIndex = 0;
+        if (index === state.currentPatternIndex && state.songPatterns.length > 0) {
+            state.currentPatternIndex = 0;
             loadPattern(0);
-        } else if (songPatterns.length === 0) {
-            currentPatternIndex = 0;
-        } else if (index < currentPatternIndex) {
-            currentPatternIndex--;
+        } else if (state.songPatterns.length === 0) {
+            state.currentPatternIndex = 0;
+        } else if (index < state.currentPatternIndex) {
+            state.currentPatternIndex--;
         }
         
         updatePatternDisplay();
-        document.getElementById('save-pattern-btn').textContent = `SAVE PATTERN ${String.fromCharCode(65 + songPatterns.length)}`;
+        document.getElementById('save-pattern-btn').textContent = `SAVE PATTERN ${String.fromCharCode(65 + state.songPatterns.length)}`;
     }
 }
 
 function loadPattern(index) {
-    const pattern = songPatterns[index];
+    const pattern = state.songPatterns[index];
     if (!pattern) return;
     
     // 1. Load Synth Controls (This will call loadScale())
     loadSynthControls(pattern.state);
     
     // 2. Load Sequence Grid
-    sequence = pattern.sequence.map(row => [...row]);
+    state.sequence = pattern.sequence.map(row => [...row]);
     createGrid();
 }
 
 // --- SONG PLAYBACK LOGIC ---
 function advanceSongPattern() {
-    if (currentPatternIndex >= songPatterns.length - 1) {
+    if (state.currentPatternIndex >= state.songPatterns.length - 1) {
         stopSong();
         return;
     }
     
-    currentPatternIndex++;
+    state.currentPatternIndex++;
     // Set flag for runStep to load and update timing on the next tick (at step 0)
-    nextPatternToLoad = songPatterns[currentPatternIndex]; 
+    state.nextPatternToLoad = state.songPatterns[state.currentPatternIndex]; 
     updatePatternDisplay();
 }
 
 function startStopSong() {
     const songBtn = document.getElementById('play-song-btn');
     
-    if (isSongPlaying) {
+    if (state.isSongPlaying) {
         stopSong();
         songBtn.textContent = 'PLAY SONG';
         songBtn.classList.remove('active');
     } else {
         // --- START SONG ---
-        if (songPatterns.length === 0) {
+        if (state.songPatterns.length === 0) {
             alert("No patterns saved to play.");
             return;
         }
         
-        if (isPlaying) {
+        if (state.isPlaying) {
             stopSequencer(); // Stop manual sequencer
         }
         
-        isSongPlaying = true;
-        currentPatternIndex = 0;
+        state.isSongPlaying = true;
+        state.currentPatternIndex = 0;
         songBtn.textContent = 'STOP SONG';
         songBtn.classList.add('active');
         
         // 1. Load the first pattern
-        loadPattern(currentPatternIndex);
+        loadPattern(state.currentPatternIndex);
         updatePatternDisplay();
         
         // 2. Start the sequencer
@@ -1639,15 +1413,15 @@ function startStopSong() {
 }
 
 function stopSong() {
-    isSongPlaying = false;
-    nextPatternToLoad = null;
-    currentPatternIndex = 0;
+    state.isSongPlaying = false;
+    state.nextPatternToLoad = null;
+    state.currentPatternIndex = 0;
     
     const songBtn = document.getElementById('play-song-btn');
     songBtn.textContent = 'PLAY SONG';
     songBtn.classList.remove('active');
     
-    if (isPlaying) {
+    if (state.isPlaying) {
         stopSequencer();
     }
     updatePatternDisplay();
@@ -1723,8 +1497,8 @@ function populateScaleSelector() {
 
 document.addEventListener('DOMContentLoaded', () => {
     // Synth Controls
-    document.getElementById('vco1-wave').onchange = (e) => vco1Wave = e.target.value;
-    document.getElementById('vco2-wave').onchange = (e) => vco2Wave = e.target.value;
+    document.getElementById('vco1-wave').onchange = (e) => state.vco1Wave = e.target.value;
+    document.getElementById('vco2-wave').onchange = (e) => state.vco2Wave = e.target.value;
     
     document.querySelectorAll('input[type="range"]').forEach(input => {
         if(input.id.includes('vco') || input.id.includes('adsr') || input.id.includes('noise')) {
@@ -1747,7 +1521,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('lfo-vcf-depth').oninput = (e) => { updateRangeLabel(e.target, ' Hz'); initRealTimeLfo(); };
 
     document.getElementById('lfo-rate').oninput = (e) => updateLFO(e.target.value, 'rate', document.getElementById('lfo-rate-val'));
-    document.getElementById('lfo-wave').onchange = (e) => updateLFO(e.target.value, 'wave');
+    document.getElementById('lfo-wave').onchange = (e) => updateLFO(e.garget.value, 'wave');
     document.getElementById('lfo-vco1-depth').oninput = (e) => updateRangeLabel(e.target, ' semitones');
     document.getElementById('lfo-vco2-depth').oninput = (e) => updateRangeLabel(e.target, ' semitones');
     
@@ -1757,7 +1531,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('delay-feedback').oninput = (e) => { updateDelay(); updateRangeLabel(e.target); };
     document.getElementById('delay-mix').oninput = (e) => { updateDelay(); updateRangeLabel(e.target); };
 
-    document.getElementById('master-volume').oninput = (e) => { masterGainNode.gain.setValueAtTime(e.target.value, audioCtx.currentTime); updateRangeLabel(e.target); };
+    document.getElementById('master-volume').oninput = (e) => { audioNodes.masterGainNode.gain.setValueAtTime(e.target.value, audioCtx.currentTime); updateRangeLabel(e.target); };
 
     // Patch
     document.getElementById('load-patch-btn').onclick = loadPatch;
