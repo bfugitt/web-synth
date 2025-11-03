@@ -1,3 +1,5 @@
+// Import all our static data from the new constants.js file
+import { MIDI_NOTE_NAMES, SCALES, ARP_CHORD_INTERVALS, PATCHES } from './constants.js';
 // Use standard AudioContext for real-time play
 const AudioContext = window.AudioContext || window.webkitAudioContext;
 const audioCtx = new AudioContext();
