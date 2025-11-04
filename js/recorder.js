@@ -7,6 +7,7 @@ import { state, audioCtx } from './state.js';
 import { SCALES } from './constants.js';
 import { getAllSynthState } from './patch.js';
 import { midiToFreq, createLfoNode } from './audioEngine.js';
+
 // We need stopSong from song.js
 let _stopSong;
 export function initRecorder(stopSongFn) {
@@ -156,21 +157,26 @@ export async function startRecording() {
     
     let totalTimeSec = 0;
     let patternsToRecord = [];
-    const fileNamePrefix = state.isSongPlaying ? 'Song' : 'Pattern';
+    
+    // --- THIS IS THE BUG FIX for song recording ---
+    const hasSong = state.songPatterns.length > 0;
+    const fileNamePrefix = hasSong ? 'Song' : 'Pattern';
 
     try {
-        if (state.isSongPlaying) {
-            alert("Recording a song will stop playback. The recording will begin immediately.");
-            if (_stopSong) _stopSong();
-            patternsToRecord = state.songPatterns;
+        if (hasSong) {
+            alert("Recording the full song chain...");
+            if (state.isSongPlaying && _stopSong) _stopSong(); // Stop if playing
+            patternsToRecord = state.songPatterns; // Record the whole song
         } else {
+            alert("No song found. Recording current pattern...");
             const currentPattern = {
                 name: "Current Pattern",
                 state: getAllSynthState(),
                 sequence: state.sequence.map(row => [...row])
             };
-            patternsToRecord = [currentPattern]; // BUG FIX: Was .push()!
+            patternsToRecord = [currentPattern];
         }
+        // --- END BUG FIX ---
         
         const NUM_STEPS = 16;
         patternsToRecord.forEach(pattern => {
@@ -216,7 +222,9 @@ export async function startRecording() {
             
             const scaleKey = patchState.scale_key || 'major';
             const scaleOffsets = SCALES[scaleKey].offsets;
-            const baseOctave = parseInt(patchState.bpm) || 60; // Use pattern's octave
+            // --- THIS IS THE BUG FIX for high pitch ---
+            const baseOctave = parseInt(patchState.baseOctave) || 60; // Was patchState.bpm
+            // --- END BUG FIX ---
             const offlineScaleNotes = scaleOffsets.slice(0, NUM_ROWS)
                 .map(offset => baseOctave + offset)
                 .reverse();
