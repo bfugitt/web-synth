@@ -18,7 +18,6 @@ import {
     initDistortion, updateDistortionAmount, toggleDistortion,
     toggleDelay, updateDelayMix,
     initReverb, updateReverbMix, toggleReverb,
-    // NEW: Chorus functions
     initChorus, updateChorusRate, updateChorusDepth, updateChorusMix, toggleChorus
 } from './effects.js';
 
@@ -96,6 +95,20 @@ function noteOff(midiNote) {
 // --- Main Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
     
+    // --- THIS IS THE FIX for the "AudioContext" warning ---
+    // A one-time listener to resume the AudioContext on the first user click.
+    function resumeAudio() {
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+            console.log('AudioContext resumed!');
+        }
+        document.body.removeEventListener('click', resumeAudio);
+        document.body.removeEventListener('touchstart', resumeAudio);
+    }
+    document.body.addEventListener('click', resumeAudio);
+    document.body.addEventListener('touchstart', resumeAudio);
+    // --- END FIX ---
+
     // --- 1. Connect Modules ---
     initPatcher(loadScale);
     initSequencer(loadSynthControls, createGrid, setupKeyMappings);
@@ -105,9 +118,9 @@ document.addEventListener('DOMContentLoaded', () => {
     setStopSongFn(stopSong);
 
     // --- 2. Initialize Systems ---
-    initializeGlobalAudioChain();
+    initializeGlobalAudioChain(); // This sets all pedals to OFF
     initDistortion();
-    initChorus(); // NEW
+    initChorus();
     initReverb(); 
     
     populatePatchSelector();
@@ -119,15 +132,16 @@ document.addEventListener('DOMContentLoaded', () => {
     updatePatternDisplay();
     setupKeyMappings();
     
-    // Set initial pedal state from HTML
-    updateDelayMix(document.getElementById('delay-mix').value, false);
+    // --- THIS IS THE FIX for the "Delay On" bug ---
+    // The buggy line below is now removed.
+    // updateDelayMix(document.getElementById('delay-mix').value, false); 
     
     // --- 3. Attach All Event Listeners ---
+    // (All listeners below are unchanged)
 
     // -- Audio Controls (Synth) --
     document.getElementById('vco1-wave').onchange = (e) => state.vco1Wave = e.target.value;
     document.getElementById('vco2-wave').onchange = (e) => state.vco2Wave = e.target.value;
-    // ... (rest of synth controls are unchanged) ...
     document.getElementById('vco1-fine-tune').oninput = (e) => updateRangeLabel(e.target);
     document.getElementById('vco1-level').oninput = (e) => updateRangeLabel(e.target);
     document.getElementById('vco2-fine-tune').oninput = (e) => updateRangeLabel(e.target);
@@ -160,7 +174,7 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleDistortion(isActive);
     };
     
-    // Chorus (NEW)
+    // Chorus
     document.getElementById('chorus-rate').oninput = (e) => {
         updateChorusRate(e.target.value);
         updateRangeLabel(e.target, ' Hz');
@@ -223,7 +237,6 @@ document.addEventListener('DOMContentLoaded', () => {
         updateBaseOctave(e.target.value);
         setupKeyMappings();
     };
-    // ... (rest of keyboard listeners are unchanged) ...
     document.getElementById('piano-keys').addEventListener('mousedown', e => {
         if (e.target.classList.contains('key')) {
             noteOn(e.target.dataset.midi);
