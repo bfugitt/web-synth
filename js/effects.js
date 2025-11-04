@@ -35,11 +35,8 @@ export function toggleDistortion(isOn) {
 
 // --- Delay ---
 
-// The old `updateDelay` is just for params now.
-// We add a new function for the on/off button.
 export function toggleDelay(isOn) {
     if (audioNodes.delay) {
-        // We use the "mix" slider to control the wet/dry
         const mix = parseFloat(document.getElementById('delay-mix').value);
         if (isOn) {
             audioNodes.delay.wetGain.gain.linearRampToValueAtTime(mix, audioCtx.currentTime + 0.01);
@@ -64,8 +61,11 @@ export function updateDelayMix(mix) {
 
 // --- Reverb (NEW) ---
 
-// This URL hosts a free-to-use Impulse Response file
-const REVERB_IR_URL = 'https://raw.githubusercontent.com/web-audio-components/simple-reverb/master/impulses/logic-canyon.wav';
+// --- THIS IS THE BUG FIX ---
+// The old URL was dead. This is a new, working URL.
+const REVERB_IR_URL = 'https://raw.githubusercontent.com/GoogleChrome/web-audio-samples/main/sounds/impulse-response-1.wav';
+// --- END BUG FIX ---
+
 
 // We must load the audio file before we can use the reverb
 // 'async' means this function can 'await' the file download
@@ -73,6 +73,9 @@ export async function initReverb() {
     console.log('Loading Reverb Impulse Response...');
     try {
         const response = await fetch(REVERB_IR_URL);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
         const audioData = await response.arrayBuffer();
         
         // Decode the audio file into a buffer
