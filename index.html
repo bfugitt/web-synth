@@ -1,7 +1,166 @@
-</div> ```
-**Directly after** that line, **add** this new HTML block for the Chorus:
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Educational Dual-VCO Synth, Sequencer & Arp v21 (Modular)</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="loading-overlay">
+        <p>Recording in progress...</p>
+        <p>Do not close the tab.</p>
+    </div>
 
-```html
+    <div class="container">
+        <h2>Educational Dual-VCO Synthesizer</h2>
+        
+        <div class="controls-panel">
+            <div class="synth-section">
+                <h3>VCO 1 (Voice 1)</h3>
+                <div class="control-group">
+                    <label for="vco1-wave">Waveform</label>
+                    <select id="vco1-wave">
+                        <option value="sawtooth">Saw</option>
+                        <option value="square">Square</option>
+                        <option value="sine">Sine</option>
+                        <option value="triangle">Triangle</option>
+                    </select>
+                </div>
+                <div class="vco-controls-grid">
+                    <div class="control-group">
+                        <label for="vco1-range">Range (Ft)</label>
+                        <select id="vco1-range" data-vco="vco1">
+                            <option value="-24">-2'</option>
+                            <option value="-12">-4'</option>
+                            <option value="0" selected>8'</option>
+                            <option value="12">16'</option>
+                            <option value="24">32'</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="vco1-fine-tune">Fine Tune: <span id="vco1-fine-tune-val">0.0</span></label>
+                        <input type="range" id="vco1-fine-tune" min="-0.5" max="0.5" step="0.01" value="0.0">
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label for="vco1-level">Output Level: <span id="vco1-level-val">0.7</span></label>
+                    <input type="range" id="vco1-level" min="0" max="1" step="0.01" value="0.7">
+                </div>
+            </div>
+
+            <div class="synth-section">
+                <h3>VCO 2 (Voice 2)</h3>
+                <div class="control-group">
+                    <label for="vco2-wave">Waveform</label>
+                    <select id="vco2-wave">
+                        <option value="sawtooth">Saw</option>
+                        <option value="square">Square</option>
+                        <option value="sine">Sine</option>
+                        <option value="triangle">Triangle</option>
+                    </select>
+                </div>
+                <div class="vco-controls-grid">
+                    <div class="control-group">
+                        <label for="vco2-range">Range (Ft)</label>
+                        <select id="vco2-range" data-vco="vco2">
+                            <option value="-24">-2'</option>
+                            <option value="-12">-4'</option>
+                            <option value="0" selected>8'</option>
+                            <option value="12">16'</option>
+                            <option value="24">32'</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="vco2-fine-tune">Fine Tune: <span id="vco2-fine-tune-val">0.0</span></label>
+                        <input type="range" id="vco2-fine-tune" min="-0.5" max="0.5" step="0.01" value="0.0">
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label for="vco2-level">Output Level: <span id="vco2-level-val">0.7</span></label>
+                    <input type="range" id="vco2-level" min="0" max="1" step="0.01" value="0.7">
+                </div>
+            </div>
+
+            <div class="synth-section">
+                <h3>ADSR Envelope</h3>
+                <div class="control-group"><label>Attack: <span id="attack-val">0.05s</span></label><input type="range" id="attack" min="0.01" max="1.0" step="0.01" value="0.05"></div>
+                <div class="control-group"><label>Decay: <span id="decay-val">0.2s</span></label><input type="range" id="decay" min="0.05" max="1.0" step="0.05" value="0.2"></div>
+                <div class="control-group"><label>Sustain: <span id="sustain-val">0.5</span></label><input type="range" id="sustain" min="0" max="1" step="0.05" value="0.5"></div>
+                <div class="control-group"><label>Release: <span id="release-val">0.5s</span></label><input type="range" id="release" min="0.05" max="2.0" step="0.05" value="0.5"></div>
+            </div>
+
+            <div class="synth-section">
+                <h3>Filter (VCF)</h3>
+                <div class="control-group"><label>Cutoff: <span id="cutoff-val">10000 Hz</span></label><input type="range" id="cutoff" min="50" max="15000" step="50" value="10000"></div>
+                <div class="control-group"><label>Resonance: <span id="res-val">1.0</span></label><input type="range" id="resonance" min="0.1" max="10" step="0.1" value="1.0"></div>
+                <div class="control-group">
+                    <label for="lfo-vcf-depth">LFO VCF Depth: <span id="lfo-vcf-depth-val">0 Hz</span></label>
+                    <input type="range" id="lfo-vcf-depth" min="0" max="5000" step="10" value="0">
+                </div>
+            </div>
+
+            <div class="synth-section" id="lfo-section">
+                <h3>Low Frequency Oscillator (LFO)</h3>
+                <div class="control-group">
+                    <label for="lfo-rate">Rate: <span id="lfo-rate-val">5.0 Hz</span></label>
+                    <input type="range" id="lfo-rate" min="0.05" max="10" step="0.05" value="5.0">
+                </div>
+                <div class="control-group">
+                    <label for="lfo-wave">Waveform</label>
+                    <select id="lfo-wave">
+                        <option value="sine">Sine</option>
+                        <option value="triangle">Triangle</option>
+                        <option value="sawtooth">Saw</option>
+                        <option value="square">Square</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="lfo-vco1-depth">VCO 1 Pitch Depth: <span id="lfo-vco1-depth-val">0.0 semitones</span></label>
+                    <input type="range" id="lfo-vco1-depth" min="0" max="12" step="0.1" value="0.0">
+                </div>
+                <div class="control-group">
+                    <label for="lfo-vco2-depth">VCO 2 Pitch Depth: <span id="lfo-vco2-depth-val">0.0 semitones</span></label>
+                    <input type="range" id="lfo-vco2-depth" min="0" max="12" step="0.1" value="0.0">
+                </div>
+            </div>
+            
+            <div class="synth-section" id="noise-section">
+                <h3>Noise Generator</h3>
+                <div class="control-group">
+                    <label for="noise-level">Level: <span id="noise-level-val">0.00</span></label>
+                    <input type="range" id="noise-level" min="0" max="1" step="0.01" value="0.00">
+                </div>
+                <div class="control-group" style="height: 100px;">
+                </div>
+            </div>
+
+            <div class="synth-section">
+                <h3>Master Output</h3>
+                <div class="control-group">
+                    <label for="master-volume">Volume: <span id="master-volume-val">0.7</span></label>
+                    <input type="range" id="master-volume" min="0" max="1" step="0.01" value="0.7">
+                </div>
+                <div class="control-group" style="height: 100px;">
+                </div>
+            </div>
+
+            </div> <div class="synth-section" id="pedalboard-section">
+            <h3>Pedal Board</h3>
+            <div class="pedal-chain">
+                
+                <div class="pedal" id="distortion-pedal">
+                    <h4>DISTORTION</h4>
+                    <div class="pedal-controls">
+                        <div class="control-group">
+                            <label>Amount: <span id="distortion-amount-val">100</span></label>
+                            <input type="range" id="distortion-amount" min="0" max="400" step="1" value="100">
+                        </div>
+                    </div>
+                    <button class="pedal-bypass-btn" id="distortion-bypass-btn">OFF</button>
+                </div>
+</div> ```
+
                 <div class="pedal" id="chorus-pedal">
                     <h4>CHORUS</h4>
                     <div class="pedal-controls">
@@ -20,3 +179,145 @@
                     </div>
                     <button class="pedal-bypass-btn" id="chorus-bypass-btn">OFF</button>
                 </div>
+              
+                <div class="pedal" id="delay-pedal">
+                    <h4>DELAY</h4>
+                    <div class="pedal-controls">
+                        <div class="control-group">
+                            <label>Time: <span id="delay-time-val">0.5s</span></label>
+                            <input type="range" id="delay-time" min="0.01" max="1.5" step="0.01" value="0.5">
+                        </div>
+                        <div class="control-group">
+                            <label>Feedback: <span id="delay-feedback-val">0.3</span></label>
+                            <input type="range" id="delay-feedback" min="0.0" max="0.95" step="0.01" value="0.3">
+                        </div>
+                        <div class="control-group">
+                            <label>Mix: <span id="delay-mix-val">0.5</span></label>
+                            <input type="range" id="delay-mix" min="0" max="1" step="0.01" value="0.5">
+                        </div>
+                    </div>
+                    <button class="pedal-bypass-btn" id="delay-bypass-btn">OFF</button>
+                </div>
+
+                <div class="pedal" id="reverb-pedal">
+                    <h4>REVERB</h4>
+                    <div class="pedal-controls">
+                        <div class="control-group">
+                            <label>Mix (Wet/Dry): <span id="reverb-mix-val">0.5</span></label>
+                            <input type="range" id="reverb-mix" min="0" max="1" step="0.01" value="0.5">
+                        </div>
+                    </div>
+                    <button class="pedal-bypass-btn" id="reverb-bypass-btn">OFF</button>
+                </div>
+
+            </div>
+        </div>
+        <div class="synth-section" id="patch-section">
+            <h3>Patch Bank (Presets)</h3>
+            <div id="patch-controls" style="display: flex; justify-content: center; gap: 20px; align-items: center; flex-wrap: wrap;">
+                <label for="patch-selector" style="font-size: 1.1em; color: #e0e0e0; margin-bottom: 0;">Select Sound:</label>
+                <select id="patch-selector" style="width: 200px;">
+                    </select>
+                <button id="load-patch-btn">LOAD PATCH</button>
+            </div>
+        </div>
+        
+        <div class="synth-section" id="arp-section" style="grid-column: 1 / 5; margin-top: 15px;">
+            <h3>Arpeggiator</h3>
+            <div id="arp-controls" style="display: flex; justify-content: space-around; gap: 20px;">
+                <div class="control-group" style="flex: 1;">
+                    <label for="arp-mode">Mode</label>
+                    <select id="arp-mode">
+                        <option value="off">Off</option>
+                        <option value="up">Up</option>
+                        <option value="down">Down</option>
+                        <option value="updown">Up/Down</option>
+                        <option value="random">Random</option>
+                    </select>
+                </div>
+                <div class="control-group" style="flex: 1;">
+                    <label for="arp-rate">Rate (Subdivision of 1/16th Step)</label>
+                    <select id="arp-rate">
+                        <option value="1">1x (1/16)</option>
+                        <option value="2">2x (1/32)</option>
+                        <option value="4">4x (1/64)</option>
+                    </select>
+                </div>
+                <div class="control-group" style="flex: 1;">
+                    <label for="arp-chords">Chord/Interval Mode</label>
+                    <select id="arp-chords">
+                        <option value="held_notes">Held Notes (Classic)</option>
+                        <option value="major_triad">Major Triad (R-3-5)</option>
+                        <option value="minor_triad">Minor Triad (R-m3-5)</option>
+                        <option value="seventh_chord">7th Chord (R-3-5-m7)</option>
+                        <option value="fifth_chord">Power 5th (R-5)</option>
+                    </select>
+                    </div>
+                <div class="control-group" style="flex: 1;">
+                    <label for="arp-octaves">Octave Range</label>
+                    <select id="arp-octaves">
+                        <option value="1">1 Octave</option>
+                        <option value="2" selected>2 Octaves</option>
+                        <option value="3">3 Octaves</option>
+                        <option value="4">4 Octaves</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="keyboard-area">
+            <div class="keyboard-controls">
+                <label for="octave-selector">Base Octave:</label>
+                <select id="octave-selector">
+                    <option value="48">C3</option>
+                    <option value="60" selected>C4</option>
+                    <option value="72">C5</option>
+                    <option value="84">C6</option>
+                </select>
+            </div>
+            <div id="piano-keys" class="piano-keys">
+                </div>
+        </div>
+        
+        <div class="synth-section" id="scale-setup" style="text-align: center;">
+            <h3 style="margin-bottom: 0;">Sequencer Scale Setup (Root: C)</h3>
+            <div class="control-group" style="max-width: 300px; margin: 10px auto 0 auto;">
+                <label for="scale-selector">Select Scale/Mode</label>
+                <select id="scale-selector">
+                    </select>
+            </div>
+        </div>
+
+        <div class="sequencer-container">
+            <h3 id="sequencer-title">16-Step Sequencer (Ionian (Major) Scale - C Root)</h3>
+            <div id="sequencer-grid" class="sequencer-grid">
+                </div>
+        </div>
+
+        <div class="transport-controls">
+            <div class="group">
+                <label for="bpm-input" style="color: #00ffff; margin-bottom: 0;">BPM</label>
+                <input type="number" id="bpm-input" min="60" max="240" value="120" style="width:60px;">
+            </div>
+            <button id="play-btn">PLAY</button>
+            <button id="stop-btn">STOP</button>
+            <button id="clear-btn">Clear Sequence</button>
+        </div>
+        
+        <div class="synth-section" id="song-section" style="grid-column: 1 / 5; margin-top: 20px;">
+            <h3>Song Chain</h3>
+            <div id="song-controls" style="display: flex; justify-content: center; gap: 20px; margin-bottom: 15px;">
+                <button id="save-pattern-btn">SAVE PATTERN A</button>
+                <button id="play-song-btn">PLAY SONG</button>
+                <button id="record-btn">RECORD SONG</button>
+            </div>
+            <div id="pattern-display" style="min-height: 40px; border: 1px dashed #444; padding: 10px; border-radius: 6px; background-color: #1a1a2e; text-align: left;">
+                <p style="margin: 0; color: #aaa;">Saved Patterns: None</p>
+            </div>
+        </div>
+
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>
