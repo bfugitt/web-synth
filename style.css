@@ -244,7 +244,7 @@ input[type="range"]::-webkit-slider-thumb {
 }
 #play-btn { background-color: #4CAF50; color: white; }
 #stop-btn { background-color: #f44336; color: white; }
-#record-btn { background-color: #ff00ff; color: white; }
+#record-btn { background-color: #2196F3; color: white; }
 #download-btn { background-color: #2196F3; color: white; }
 #clear-btn { background-color: #666; color: white; }
 #play-song-btn { background-color: #2196F3; color: white; }
