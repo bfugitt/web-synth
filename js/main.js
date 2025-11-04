@@ -24,7 +24,7 @@ import {
 
 import { 
     initSequencer, clearGrid, loadScale, startStopSequencer, 
-    startSequencer, // <<< --- THIS WAS THE MISSING PIECE
+    startSequencer, // This was our previous bug fix
     stopSequencer, setAdvanceSongFn, setStopSongFn 
 } from './sequencer.js';
 
@@ -105,7 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Pass functions to modules that need them to avoid circular dependencies
     initPatcher(loadScale);
     initSequencer(loadSynthControls, createGrid, setupKeyMappings);
-    initSong(stopSequencer, startSequencer); // This line will now work!
+    initSong(stopSequencer, startSequencer);
     initRecorder(stopSong);
     setAdvanceSongFn(advanceSongPattern);
     setStopSongFn(stopSong);
@@ -196,7 +196,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     document.addEventListener('keyup', (e) => {
-        const key = e.key.toUpperCase.toUpperCase();
+        // --- THIS IS THE BUG FIX for "stuck keys" ---
+        const key = e.key.toUpperCase(); // Was .toUpperCase.toUpperCase()
         if (keyToMidi[key]) {
             const midiNote = keyToMidi[key]();
             noteOff(midiNote);
