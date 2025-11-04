@@ -5,13 +5,8 @@
 
 import { state, audioCtx, audioNodes } from './state.js';
 import { PATCHES } from './constants.js';
-
-// --- BUG FIX: Imports were wrong! ---
-// Import UI helper from ui.js
 import { updateAllRangeLabels } from './ui.js';
-// Import audio helpers from audioEngine.js
 import { updateVCF, updateDelay, updateLFO, initRealTimeLfo } from './audioEngine.js';
-// --- END BUG FIX ---
 
 // We'll have a circular dependency if we import sequencer.js (for loadScale)
 // So, main.js will pass the loadScale function to us.
@@ -52,7 +47,9 @@ export function getAllSynthState() {
         arp_chords: document.getElementById('arp-chords').value,
         arp_octaves: document.getElementById('arp-octaves').value,
         bpm: document.getElementById('bpm-input').value,
-        scale_key: document.getElementById('scale-selector').value
+        scale_key: document.getElementById('scale-selector').value,
+        // --- THIS IS THE BUG FIX for recording pitch ---
+        baseOctave: document.getElementById('octave-selector').value
     };
 }
 
@@ -87,7 +84,9 @@ export function loadSynthControls(patchState) {
         { id: 'arp-chords', key: 'arp_chords' },
         { id: 'arp-octaves', key: 'arp_octaves' },
         { id: 'bpm-input', key: 'bpm' },
-        { id: 'scale-selector', key: 'scale_key' }
+        { id: 'scale-selector', key: 'scale_key' },
+        // --- THIS IS THE BUG FIX for recording pitch ---
+        { id: 'octave-selector', key: 'baseOctave' }
     ];
 
     controls.forEach(control => {
@@ -101,6 +100,8 @@ export function loadSynthControls(patchState) {
 
     state.vco1Wave = patchState.vco1_wave;
     state.vco2Wave = patchState.vco2_wave;
+    // --- THIS IS THE BUG FIX for recording pitch ---
+    state.baseOctave = parseInt(patchState.baseOctave) || 60;
     
     updateAllRangeLabels();
     updateVCF();
