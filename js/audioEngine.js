@@ -25,9 +25,7 @@ export function getAdsr() {
     };
 }
 
-// --- THIS IS THE BUG FIX ---
 // Helper function to create the distortion "curve"
-// It needed to be EXPORTED so effects.js can use it.
 export function makeDistortionCurve(amount) {
     let k = typeof amount === 'number' ? amount : 50,
         n_samples = 44100,
@@ -41,7 +39,6 @@ export function makeDistortionCurve(amount) {
     }
     return curve;
 };
-// --- END BUG FIX ---
 
 
 // --- Audio Chain Initialization ---
@@ -65,9 +62,8 @@ export function initializeGlobalAudioChain() {
         dry: audioCtx.createGain(),
         output: audioCtx.createGain()
     };
-    // Set distortion to OFF by default
-    audioNodes.distortion.wet.gain.value = 0;
-    audioNodes.distortion.dry.gain.value = 1;
+    audioNodes.distortion.wet.gain.value = 0; // Off
+    audioNodes.distortion.dry.gain.value = 1; // Bypassed
 
     // 4. Delay Pedal Nodes
     audioNodes.delay = {
@@ -78,6 +74,22 @@ export function initializeGlobalAudioChain() {
         dryGain: audioCtx.createGain(),
         output: audioCtx.createGain()
     };
+    // Set delay to OFF by default
+    audioNodes.delay.wetGain.gain.value = 0;
+    audioNodes.delay.dryGain.gain.value = 1;
+
+    // 5. Reverb Pedal Nodes (NEW)
+    audioNodes.reverb = {
+        input: audioCtx.createGain(),
+        convolver: audioCtx.createConvolver(), // The magic!
+        wet: audioCtx.createGain(),
+        dry: audioCtx.createGain(),
+        output: audioCtx.createGain()
+    };
+    // Set reverb to OFF by default
+    audioNodes.reverb.wet.gain.value = 0;
+    audioNodes.reverb.dry.gain.value = 1;
+
     
     // --- CONNECT THE FULL CHAIN ---
     
@@ -93,21 +105,21 @@ export function initializeGlobalAudioChain() {
     audioNodes.distortion.output.connect(audioNodes.delay.input);
     
     // 4. Inside Delay Pedal
-    audioNodes.delay.input.connect(audioNodes.delay.delayNode); // wet path
-    audioNodes.delay.delayNode.connect(audioNodes.delay.feedbackGain);
-    audioNodes.delay.feedbackGain.connect(audioNodes.delay.delayNode);
-    audioNodes.delay.delayNode.connect(audioNodes.delay.wetGain);
-    audioNodes.delay.wetGain.connect(audioNodes.delay.output);
+    audioNodes.delay.input.connect(audioNodes.delay.delayNode).connect(audioNodes.delay.feedbackGain).connect(audioNodes.delay.delayNode); // Wet path loop
+    audioNodes.delay.delayNode.connect(audioNodes.delay.wetGain).connect(audioNodes.delay.output); // Wet path out
+    audioNodes.delay.input.connect(audioNodes.delay.dryGain).connect(audioNodes.delay.output); // Dry path out
     
-    audioNodes.delay.input.connect(audioNodes.delay.dryGain); // dry path
-    audioNodes.delay.dryGain.connect(audioNodes.delay.output);
-    
-    // 5. Delay Pedal (Output) -> Master Volume -> Speakers
-    audioNodes.delay.output.connect(audioNodes.masterGainNode);
+    // 5. Delay Pedal -> Reverb Pedal (NEW)
+    audioNodes.delay.output.connect(audioNodes.reverb.input);
+    audioNodes.reverb.input.connect(audioNodes.reverb.dry).connect(audioNodes.reverb.output); // Dry path
+    audioNodes.reverb.input.connect(audioNodes.reverb.convolver).connect(audioNodes.reverb.wet).connect(audioNodes.reverb.output); // Wet path
+
+    // 6. Reverb Pedal (Output) -> Master Volume -> Speakers
+    audioNodes.reverb.output.connect(audioNodes.masterGainNode);
     audioNodes.masterGainNode.connect(audioCtx.destination);
 
     // Initialize parameters
-    updateDelay();
+    updateDelayParams(); // Renamed this
     updateVCF();
 }
 
@@ -117,16 +129,18 @@ export function updateVCF() {
     audioNodes.vcfNode.Q.linearRampToValueAtTime(parseFloat(document.getElementById('resonance').value), time + 0.01);
 }
 
-export function updateDelay() {
+// This function only updates the *parameters*
+// The on/off logic is now in effects.js
+export function updateDelayParams() {
     const time = parseFloat(document.getElementById('delay-time').value);
     const feedback = parseFloat(document.getElementById('delay-feedback').value);
-    const mix = parseFloat(document.getElementById('delay-mix').value);
     const currentTime = audioCtx.currentTime;
 
     audioNodes.delay.delayNode.delayTime.linearRampToValueAtTime(time, currentTime + 0.01);
     audioNodes.delay.feedbackGain.gain.linearRampToValueAtTime(feedback, currentTime + 0.01);
-    audioNodes.delay.dryGain.gain.linearRampToValueAtTime(1.0 - mix, currentTime + 0.01);
-    audioNodes.delay.wetGain.gain.linearRampToValueAtTime(mix, currentTime + 0.01);
+    
+    // The "mix" is now handled by the wet/dry gains
+    // We'll add that to effects.js
 }
 
 // --- LFO Functions ---
@@ -177,7 +191,7 @@ export function updateLFO(value, param, valEl = null) {
     }
 }
 
-// --- Core Note On/Off Functions ---
+// --- Core Note On/Off Functions (Unchanged) ---
 export function startNote(midiNote) {
     while (state.activeVoices[midiNote] && state.activeVoices[midiNote].length > 0) {
         stopNote(midiNote, true); 
@@ -199,7 +213,6 @@ export function startNote(midiNote) {
     noteGain.gain.linearRampToValueAtTime(1.0, startTime + attack);
     noteGain.gain.setTargetAtTime(sustain, startTime + attack + decay, decay * 0.2);
     
-    // Connect this note's output to the main synth mixer
     noteGain.connect(audioNodes.synthOutputMixer);
 
     const voiceMixer = audioCtx.createGain();
