@@ -6,26 +6,17 @@ import { audioCtx, audioNodes } from './state.js';
 import { makeDistortionCurve } from './audioEngine.js';
 import { REVERB_IR_BASE64 } from './constants.js';
 
-// --- THIS IS THE FIX ---
-// Helper function to decode a Base64 string into an ArrayBuffer
+// Helper to decode Base64
 function _base64ToArrayBuffer(base64) {
-    // 1. Get the raw base64 data (remove the 'data:audio/wav;base64,' prefix)
     const base64Data = base64.split(',')[1];
-    // 2. Convert from base64 to a "binary" string
     const binaryString = window.atob(base64Data);
-    // 3. Get the length of that string
     const len = binaryString.length;
-    // 4. Create an array of 8-bit integers (a byte array)
     const bytes = new Uint8Array(len);
-    // 5. Loop through and store the character codes of each character
     for (let i = 0; i < len; i++) {
         bytes[i] = binaryString.charCodeAt(i);
     }
-    // 6. Return the underlying ArrayBuffer
     return bytes.buffer;
 }
-// --- END FIX ---
-
 
 // --- Distortion ---
 
@@ -55,6 +46,61 @@ export function toggleDistortion(isOn) {
     }
 }
 
+// --- Chorus (NEW) ---
+
+export function initChorus() {
+    // Set initial values from the HTML
+    const rate = parseFloat(document.getElementById('chorus-rate').value);
+    const depth = parseFloat(document.getElementById('chorus-depth').value);
+    const mix = parseFloat(document.getElementById('chorus-mix').value);
+    
+    audioNodes.chorus.lfo.frequency.setValueAtTime(rate, audioCtx.currentTime);
+    // Depth is a % of the base 5ms delay. 0.5 depth = 2.5ms swing
+    audioNodes.chorus.depth.gain.setValueAtTime(0.005 * depth, audioCtx.currentTime); 
+    
+    // Set initial mix (which is 'off')
+    updateChorusMix(mix, false); // false = don't check 'active' button
+}
+
+export function updateChorusRate(rate) {
+    if (audioNodes.chorus) {
+        audioNodes.chorus.lfo.frequency.linearRampToValueAtTime(rate, audioCtx.currentTime + 0.01);
+    }
+}
+
+export function updateChorusDepth(depth) {
+    if (audioNodes.chorus) {
+        // Depth is a % of the base 5ms delay. 0.5 depth = 2.5ms swing
+        const depthAmount = 0.005 * depth;
+        audioNodes.chorus.depth.gain.linearRampToValueAtTime(depthAmount, audioCtx.currentTime + 0.01);
+    }
+}
+
+export function updateChorusMix(mix, checkActive = true) {
+    if (audioNodes.chorus) {
+        // Only update if the pedal is ON, or if we force it
+        if (!checkActive || document.getElementById('chorus-bypass-btn').classList.contains('active')) {
+            audioNodes.chorus.wet.gain.linearRampToValueAtTime(mix, audioCtx.currentTime + 0.01);
+            audioNodes.chorus.dry.gain.linearRampToValueAtTime(1.0 - mix, audioCtx.currentTime + 0.01);
+        }
+    }
+}
+
+export function toggleChorus(isOn) {
+    if (audioNodes.chorus) {
+        const mix = parseFloat(document.getElementById('chorus-mix').value);
+        if (isOn) {
+            audioNodes.chorus.wet.gain.linearRampToValueAtTime(mix, audioCtx.currentTime + 0.01);
+            audioNodes.chorus.dry.gain.linearRampToValueAtTime(1.0 - mix, audioCtx.currentTime + 0.01);
+        } else {
+            // Bypassed
+            audioNodes.chorus.wet.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.01);
+            audioNodes.chorus.dry.gain.linearRampToValueAtTime(1, audioCtx.currentTime + 0.01);
+        }
+    }
+}
+
+
 // --- Delay ---
 
 export function toggleDelay(isOn) {
@@ -71,46 +117,34 @@ export function toggleDelay(isOn) {
     }
 }
 
-export function updateDelayMix(mix) {
+export function updateDelayMix(mix, checkActive = true) {
     if (audioNodes.delay) {
-        // Only update if the pedal is ON
-        if (document.getElementById('delay-bypass-btn').classList.contains('active')) {
+        if (!checkActive || document.getElementById('delay-bypass-btn').classList.contains('active')) {
             audioNodes.delay.wetGain.gain.linearRampToValueAtTime(mix, audioCtx.currentTime + 0.01);
             audioNodes.delay.dryGain.gain.linearRampToValueAtTime(1.0 - mix, audioCtx.currentTime + 0.01);
         }
     }
 }
 
-// --- Reverb (NEW) ---
+// --- Reverb ---
 
 export async function initReverb() {
     console.log('Loading Reverb Impulse Response...');
     try {
-        // --- THIS IS THE FIX ---
-        // 1. Decode the Base64 string into an ArrayBuffer
         const audioData = _base64ToArrayBuffer(REVERB_IR_BASE64);
-        // --- END FIX ---
-
-        // 2. Decode the ArrayBuffer into an AudioBuffer
         const buffer = await audioCtx.decodeAudioData(audioData);
-        
-        // 3. Set the convolver's buffer to our new sound
         audioNodes.reverb.convolver.buffer = buffer;
-        
-        // 4. Set initial mix
         const initialMix = document.getElementById('reverb-mix').value;
-        updateReverbMix(initialMix);
-        
+        updateReverbMix(initialMix, false); // false = don't check 'active'
         console.log('Reverb loaded successfully!');
     } catch (e) {
         console.error('Failed to load reverb IR:', e);
     }
 }
 
-export function updateReverbMix(mix) {
+export function updateReverbMix(mix, checkActive = true) {
     if (audioNodes.reverb) {
-        // Only update if the pedal is ON
-        if (document.getElementById('reverb-bypass-btn').classList.contains('active')) {
+        if (!checkActive || document.getElementById('reverb-bypass-btn').classList.contains('active')) {
             audioNodes.reverb.wet.gain.linearRampToValueAtTime(mix, audioCtx.currentTime + 0.01);
             audioNodes.reverb.dry.gain.linearRampToValueAtTime(1.0 - mix, audioCtx.currentTime + 0.01);
         }
