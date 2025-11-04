@@ -4,6 +4,10 @@
  */
 import { audioCtx, audioNodes } from './state.js';
 import { makeDistortionCurve } from './audioEngine.js';
+// --- THIS IS THE FIX ---
+// Import our new Base64 data constant
+import { REVERB_IR_BASE64 } from './constants.js';
+// --- END FIX ---
 
 // --- Distortion ---
 
@@ -61,16 +65,16 @@ export function updateDelayMix(mix) {
 
 // --- Reverb (NEW) ---
 
-// This is the working link to a Parking Garage IR
-const REVERB_IR_URL = 'https://raw.githubusercontent.com/GoogleChrome/web-audio-samples/main/sounds/impulse-response-1.wav';
-
-
 // We must load the audio file before we can use the reverb
 // 'async' means this function can 'await' the file download
 export async function initReverb() {
     console.log('Loading Reverb Impulse Response...');
     try {
-        const response = await fetch(REVERB_IR_URL);
+        // --- THIS IS THE FIX ---
+        // Instead of fetching a dead link, we fetch our Base64 data
+        const response = await fetch(REVERB_IR_BASE64);
+        // --- END FIX ---
+
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
