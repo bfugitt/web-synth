@@ -25,74 +25,27 @@ export function getAdsr() {
     };
 }
 
+// --- THIS IS THE BUG FIX ---
+// Helper function to create the distortion "curve"
+// It needed to be EXPORTED so effects.js can use it.
+export function makeDistortionCurve(amount) {
+    let k = typeof amount === 'number' ? amount : 50,
+        n_samples = 44100,
+        curve = new Float32Array(n_samples),
+        deg = Math.PI / 180,
+        i = 0,
+        x;
+    for ( ; i < n_samples; ++i ) {
+        x = i * 2 / n_samples - 1;
+        curve[i] = ( 3 + k ) * x * 20 * deg / ( Math.PI + k * Math.abs(x) );
+    }
+    return curve;
+};
+// --- END BUG FIX ---
+
+
 // --- Audio Chain Initialization ---
 export function initializeGlobalAudioChain() {
-    // 1. Master Output
-    audioNodes.masterGainNode = audioCtx.createGain();
-    audioNodes.masterGainNode.gain.setValueAtTime(0.7, audioCtx.currentTime);
-
-    // 2. Filter (VCF)
-    audioNodes.vcfNode = audioCtx.createBiquadFilter();
-    audioNodes.vcfNode.type = 'lowpass';
-    audioNodes.vcfNode.frequency.setValueAtTime(10000, audioCtx.currentTime);
-    audioNodes.vcfNode.Q.setValueAtTime(1.0, audioCtx.currentTime);
-    
-    // 3. Synth Output Mixer (feeds into VCF)
-    audioNodes.synthOutputMixer = audioCtx.createGain();
-    audioNodes.synthOutputMixer.connect(audioNodes.vcfNode);
-
-    // 4. Delay Effect Nodes (Delay is now the *last* effect in the chain)
-    audioNodes.delayNode = audioCtx.createDelay(2.0);
-    audioNodes.feedbackGain = audioCtx.createGain();
-    audioNodes.wetGain = audioCtx.createGain();
-    audioNodes.dryGain = audioCtx.createGain();
-
-    // --- NEW AUDIO ROUTING ---
-    // The synth (VCF) output now feeds into the Distortion pedal's input
-    // (We assume distortion nodes are created by effects.js, but we connect them here)
-    // The distortion pedal's output will then feed into the Delay pedal's input.
-    
-    // 1. Synth (VCF) -> Distortion Input
-    //    (We can't connect this yet, effects.js does it)
-    //    Wait, no, effects.js creates them, this file connects them.
-    
-    // Let's re-think:
-    // This file, audioEngine.js, is responsible for the *main chain*.
-    // effects.js just creates/controls the nodes.
-
-    // 1. Master Output
-    audioNodes.masterGainNode = audioCtx.createGain();
-    audioNodes.masterGainNode.gain.setValueAtTime(0.7, audioCtx.currentTime);
-    
-    // 2. Filter (VCF)
-    audioNodes.vcfNode = audioCtx.createBiquadFilter();
-    // ... (settings as before) ...
-    
-    // 3. Synth Output Mixer
-    audioNodes.synthOutputMixer = audioCtx.createGain();
-    
-    // 4. Delay Nodes
-    audioNodes.delayNode = audioCtx.createDelay(2.0);
-    audioNodes.feedbackGain = audioCtx.createGain();
-    audioNodes.wetGain = audioCtx.createGain();
-    audioNodes.dryGain = audioCtx.createGain();
-
-    // --- ROUTING (NEW) ---
-    // This is the main audio path
-    
-    // 1. Synth voices -> Mixer
-    audioNodes.synthOutputMixer.connect(audioNodes.vcfNode);
-    
-    // 2. VCF -> Distortion Pedal (Input)
-    //    (The distortion nodes are created in effects.js,
-    //     so we just connect to its input)
-    //    This is backwards. This file must create the nodes.
-    
-    // --- OK, FINAL PLAN (SIMPLER) ---
-    // 1. Create ALL nodes here.
-    // 2. Connect them.
-    // 3. effects.js will just *control* them.
-    
     // 1. Master Gain
     audioNodes.masterGainNode = audioCtx.createGain();
     audioNodes.masterGainNode.gain.setValueAtTime(0.7, audioCtx.currentTime);
@@ -118,12 +71,12 @@ export function initializeGlobalAudioChain() {
 
     // 4. Delay Pedal Nodes
     audioNodes.delay = {
-        input: audioCtx.createGain(), // We'll use this as the delay's input
+        input: audioCtx.createGain(),
         delayNode: audioCtx.createDelay(2.0),
         feedbackGain: audioCtx.createGain(),
         wetGain: audioCtx.createGain(),
         dryGain: audioCtx.createGain(),
-        output: audioCtx.createGain() // And this as its output
+        output: audioCtx.createGain()
     };
     
     // --- CONNECT THE FULL CHAIN ---
@@ -139,7 +92,7 @@ export function initializeGlobalAudioChain() {
     // 3. Distortion Pedal -> Delay Pedal
     audioNodes.distortion.output.connect(audioNodes.delay.input);
     
-    // 4. Inside Delay Pedal (from old setup)
+    // 4. Inside Delay Pedal
     audioNodes.delay.input.connect(audioNodes.delay.delayNode); // wet path
     audioNodes.delay.delayNode.connect(audioNodes.delay.feedbackGain);
     audioNodes.delay.feedbackGain.connect(audioNodes.delay.delayNode);
