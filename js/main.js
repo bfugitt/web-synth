@@ -24,6 +24,7 @@ import {
 
 import { 
     initSequencer, clearGrid, loadScale, startStopSequencer, 
+    startSequencer, // <<< --- THIS WAS THE MISSING PIECE
     stopSequencer, setAdvanceSongFn, setStopSongFn 
 } from './sequencer.js';
 
@@ -104,7 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Pass functions to modules that need them to avoid circular dependencies
     initPatcher(loadScale);
     initSequencer(loadSynthControls, createGrid, setupKeyMappings);
-    initSong(stopSequencer, startSequencer);
+    initSong(stopSequencer, startSequencer); // This line will now work!
     initRecorder(stopSong);
     setAdvanceSongFn(advanceSongPattern);
     setStopSongFn(stopSong);
@@ -195,7 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     document.addEventListener('keyup', (e) => {
-        const key = e.key.toUpperCase();
+        const key = e.key.toUpperCase.toUpperCase();
         if (keyToMidi[key]) {
             const midiNote = keyToMidi[key]();
             noteOff(midiNote);
