@@ -13,16 +13,25 @@ import {
     initRealTimeLfo 
 } from './audioEngine.js';
 
-// We need functions from effects.js to update the pedal state
-import { toggleDistortion, toggleDelay, toggleReverb, updateDelayMix, updateReverbMix } from './effects.js';
+// Import ALL effects functions
+import { 
+    toggleDistortion, 
+    toggleDelay, 
+    toggleReverb, 
+    updateDelayMix, 
+    updateReverbMix,
+    toggleChorus, // NEW
+    updateChorusRate, // NEW
+    updateChorusDepth, // NEW
+    updateChorusMix // NEW
+} from './effects.js';
 
 
-let _loadScale; // Private function to be set by main.js
+let _loadScale;
 export function initPatcher(loadScaleFn) {
     _loadScale = loadScaleFn;
 }
 
-// Helper to check if a pedal button is 'on'
 function isPedalOn(id) {
     const btn = document.getElementById(id);
     return btn && btn.classList.contains('active');
@@ -30,7 +39,7 @@ function isPedalOn(id) {
 
 export function getAllSynthState() {
     return {
-        // ... (all existing synth properties) ...
+        // ... (synth properties) ...
         vco1_wave: document.getElementById('vco1-wave').value,
         vco1_range: document.getElementById('vco1-range').value,
         vco1_fine_tune: document.getElementById('vco1-fine-tune').value,
@@ -60,9 +69,15 @@ export function getAllSynthState() {
         scale_key: document.getElementById('scale-selector').value,
         baseOctave: document.getElementById('octave-selector').value,
 
-        // --- NEW: Save Pedal States ---
+        // Pedal States
         distortion_amount: document.getElementById('distortion-amount').value,
         distortion_on: isPedalOn('distortion-bypass-btn'),
+        
+        // NEW: Chorus
+        chorus_rate: document.getElementById('chorus-rate').value,
+        chorus_depth: document.getElementById('chorus-depth').value,
+        chorus_mix: document.getElementById('chorus-mix').value,
+        chorus_on: isPedalOn('chorus-bypass-btn'),
         
         delay_time: document.getElementById('delay-time').value,
         delay_feedback: document.getElementById('delay-feedback').value,
@@ -74,7 +89,6 @@ export function getAllSynthState() {
     };
 }
 
-// Helper to set a pedal button's state
 function setPedalState(id, isOn) {
     const btn = document.getElementById(id);
     if (!btn) return;
@@ -90,7 +104,7 @@ function setPedalState(id, isOn) {
 
 export function loadSynthControls(patchState) {
     const controls = [
-        // ... (all existing controls) ...
+        // ... (synth controls) ...
         { id: 'vco1-wave', key: 'vco1_wave' },
         { id: 'vco1-range', key: 'vco1_range' },
         { id: 'vco1-fine-tune', key: 'vco1_fine_tune' },
@@ -120,8 +134,14 @@ export function loadSynthControls(patchState) {
         { id: 'scale-selector', key: 'scale_key' },
         { id: 'octave-selector', key: 'baseOctave' },
         
-        // --- NEW: Load Pedal Controls ---
+        // Pedal Controls
         { id: 'distortion-amount', key: 'distortion_amount' },
+        
+        // NEW: Chorus
+        { id: 'chorus-rate', key: 'chorus_rate' },
+        { id: 'chorus-depth', key: 'chorus_depth' },
+        { id: 'chorus-mix', key: 'chorus_mix' },
+        
         { id: 'delay-time', key: 'delay_time' },
         { id: 'delay-feedback', key: 'delay_feedback' },
         { id: 'delay-mix', key: 'delay_mix' },
@@ -151,10 +171,14 @@ export function loadSynthControls(patchState) {
     initRealTimeLfo();
     audioNodes.masterGainNode.gain.setValueAtTime(parseFloat(patchState.master_volume), audioCtx.currentTime);
 
-    // --- NEW: Set Pedal On/Off States ---
+    // Set Pedal On/Off States
     setPedalState('distortion-bypass-btn', patchState.distortion_on);
     toggleDistortion(patchState.distortion_on);
     
+    // NEW: Chorus
+    setPedalState('chorus-bypass-btn', patchState.chorus_on);
+    toggleChorus(patchState.chorus_on);
+
     setPedalState('delay-bypass-btn', patchState.delay_on);
     toggleDelay(patchState.delay_on);
     
@@ -162,8 +186,11 @@ export function loadSynthControls(patchState) {
     toggleReverb(patchState.reverb_on);
 
     // Update pedal-dependent params
-    updateDelayMix(patchState.delay_mix);
-    updateReverbMix(patchState.reverb_mix);
+    updateChorusRate(patchState.chorus_rate);
+    updateChorusDepth(patchState.chorus_depth);
+    updateChorusMix(patchState.chorus_mix, patchState.chorus_on); // Pass 'on' state
+    updateDelayMix(patchState.delay_mix, patchState.delay_on);
+    updateReverbMix(patchState.reverb_mix, patchState.reverb_on);
 
     // Load scale
     if (patchState.scale_key && _loadScale) {
