@@ -6,7 +6,18 @@
 import { state, audioCtx, audioNodes } from './state.js';
 import { PATCHES } from './constants.js';
 import { updateAllRangeLabels } from './ui.js';
-import { updateVCF, updateDelay, updateLFO, initRealTimeLfo } from './audioEngine.js';
+
+// --- THIS IS THE BUG FIX ---
+// It was trying to import 'updateDelay', but we renamed it
+// to 'updateDelayParams' in the last step.
+import { 
+    updateVCF, 
+    updateDelayParams, // <-- This is the fix
+    updateLFO, 
+    initRealTimeLfo 
+} from './audioEngine.js';
+// --- END BUG FIX ---
+
 
 // We'll have a circular dependency if we import sequencer.js (for loadScale)
 // So, main.js will pass the loadScale function to us.
@@ -48,7 +59,6 @@ export function getAllSynthState() {
         arp_octaves: document.getElementById('arp-octaves').value,
         bpm: document.getElementById('bpm-input').value,
         scale_key: document.getElementById('scale-selector').value,
-        // --- THIS IS THE BUG FIX for recording pitch ---
         baseOctave: document.getElementById('octave-selector').value
     };
 }
@@ -85,7 +95,6 @@ export function loadSynthControls(patchState) {
         { id: 'arp-octaves', key: 'arp_octaves' },
         { id: 'bpm-input', key: 'bpm' },
         { id: 'scale-selector', key: 'scale_key' },
-        // --- THIS IS THE BUG FIX for recording pitch ---
         { id: 'octave-selector', key: 'baseOctave' }
     ];
 
@@ -100,12 +109,11 @@ export function loadSynthControls(patchState) {
 
     state.vco1Wave = patchState.vco1_wave;
     state.vco2Wave = patchState.vco2_wave;
-    // --- THIS IS THE BUG FIX for recording pitch ---
     state.baseOctave = parseInt(patchState.baseOctave) || 60;
     
     updateAllRangeLabels();
     updateVCF();
-    updateDelay();
+    updateDelayParams(); // This now correctly calls the renamed function
     updateLFO(patchState.lfo_rate, 'rate');
     updateLFO(patchState.lfo_wave, 'wave');
     initRealTimeLfo();
