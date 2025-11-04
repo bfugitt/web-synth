@@ -338,3 +338,67 @@ input[type="range"]::-webkit-slider-thumb {
         gap: 10px;
     }
 }
+
+
+
+
+
+
+#pedalboard-section {
+    grid-column: 1 / 5; /* Span all columns */
+    background: #111;
+    border: 1px solid #ff4136; /* Red border for effects */
+}
+#pedalboard-section h3 {
+    color: #ff4136; /* Red title */
+    border-bottom: 1px solid #ff4136;
+}
+
+.pedal-chain {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    justify-content: center;
+}
+
+.pedal {
+    width: 150px;
+    background: #502222; /* Dark red */
+    border: 1px solid #ff4136;
+    border-radius: 8px;
+    padding: 10px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.4);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+.pedal h4 {
+    margin: 0 0 10px 0;
+    text-align: center;
+    background: #301111;
+    padding: 5px;
+    border-radius: 4px;
+    color: #fff;
+    font-weight: 700;
+}
+.pedal-controls {
+    flex-grow: 1;
+    margin-bottom: 10px;
+}
+
+.pedal-bypass-btn {
+    width: 100%;
+    padding: 10px;
+    border: none;
+    border-radius: 6px;
+    font-weight: bold;
+    cursor: pointer;
+    background-color: #888;
+    color: #222;
+    transition: background-color 0.1s;
+}
+.pedal-bypass-btn.active {
+    background-color: #ff4136; /* Bright red when ON */
+    color: #fff;
+    box-shadow: 0 0 10px #ff4136;
+}
