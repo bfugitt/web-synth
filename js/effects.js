@@ -23,28 +23,21 @@ function makeDistortionCurve(amount) {
 
 // Initialize the distortion pedal
 export function initDistortion() {
-    // Create all the nodes for this pedal
-    audioNodes.distortion = {
-        input: audioCtx.createGain(),
-        waveShaper: audioCtx.createWaveShaper(),
-        wet: audioCtx.createGain(),
-        dry: audioCtx.createGain(),
-        output: audioCtx.createGain()
-    };
+    // BUG FIX:
+    // DO NOT create new nodes here.
+    // The nodes are already created by audioEngine.js.
+    // We just need to set their initial values.
     
-    // Create the signal path
-    // input -> dry -> output
-    // input -> waveShaper -> wet -> output
-    audioNodes.distortion.input.connect(audioNodes.distortion.dry).connect(audioNodes.distortion.output);
-    audioNodes.distortion.input.connect(audioNodes.distortion.waveShaper).connect(audioNodes.distortion.wet).connect(audioNodes.distortion.output);
-
-    // Set default state (bypassed/off)
+    // Set default curve from the '100' value in the HTML
+    const initialAmount = document.getElementById('distortion-amount').value;
+    audioNodes.distortion.waveShaper.curve = makeDistortionCurve(initialAmount);
+    audioNodes.distortion.waveShaper.oversample = '4x';
+    
+    // Default state is "off" (bypassed).
+    // This is already set in audioEngine.js, but
+    // we can confirm it here.
     audioNodes.distortion.wet.gain.value = 0;
     audioNodes.distortion.dry.gain.value = 1;
-    
-    // Set default curve
-    audioNodes.distortion.waveShaper.curve = makeDistortionCurve(100);
-    audioNodes.distortion.waveShaper.oversample = '4x';
 }
 
 // Called by the slider
