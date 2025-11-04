@@ -82,7 +82,7 @@ function createOfflineVoice(context, patchState, midiNote, startTime, duration, 
     
     if (vco1Level > 0) {
         const vco1Node = context.createOscillator();
-        vco1Node.type = patchState.vco1_wave;
+        vco1Node.type = patchState.vco1_wave; // This should be lowercase now
         const vco1FinalFreq = freq * Math.pow(2, (tune1Range + tune1Fine) / 12);
         vco1Node.frequency.setValueAtTime(vco1FinalFreq, startTime);
         const vco1Gain = context.createGain();
@@ -102,7 +102,7 @@ function createOfflineVoice(context, patchState, midiNote, startTime, duration, 
 
     if (vco2Level > 0) {
         const vco2Node = context.createOscillator();
-        vco2Node.type = patchState.vco2_wave;
+        vco2Node.type = patchState.vco2_wave; // This is the one that was erroring
         const vco2FinalFreq = freq * Math.pow(2, (tune2Range + tune2Fine) / 12);
         vco2Node.frequency.setValueAtTime(vco2FinalFreq, startTime);
         const vco2Gain = context.createGain();
@@ -158,7 +158,6 @@ export async function startRecording() {
     let totalTimeSec = 0;
     let patternsToRecord = [];
     
-    // --- THIS IS THE BUG FIX for song recording ---
     const hasSong = state.songPatterns.length > 0;
     const fileNamePrefix = hasSong ? 'Song' : 'Pattern';
 
@@ -176,7 +175,6 @@ export async function startRecording() {
             };
             patternsToRecord = [currentPattern];
         }
-        // --- END BUG FIX ---
         
         const NUM_STEPS = 16;
         patternsToRecord.forEach(pattern => {
@@ -222,9 +220,11 @@ export async function startRecording() {
             
             const scaleKey = patchState.scale_key || 'major';
             const scaleOffsets = SCALES[scaleKey].offsets;
+            
             // --- THIS IS THE BUG FIX for high pitch ---
-            const baseOctave = parseInt(patchState.baseOctave) || 60; // Was patchState.bpm
+            const baseOctave = parseInt(patchState.baseOctave) || 60; 
             // --- END BUG FIX ---
+            
             const offlineScaleNotes = scaleOffsets.slice(0, NUM_ROWS)
                 .map(offset => baseOctave + offset)
                 .reverse();
