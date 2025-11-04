@@ -61,10 +61,8 @@ export function updateDelayMix(mix) {
 
 // --- Reverb (NEW) ---
 
-// --- THIS IS THE BUG FIX ---
-// The old URL was dead. This is a new, working URL.
+// This is the working link to a Parking Garage IR
 const REVERB_IR_URL = 'https://raw.githubusercontent.com/GoogleChrome/web-audio-samples/main/sounds/impulse-response-1.wav';
-// --- END BUG FIX ---
 
 
 // We must load the audio file before we can use the reverb
