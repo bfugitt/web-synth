@@ -5,7 +5,14 @@
 
 import { state, audioCtx, audioNodes } from './state.js';
 import { PATCHES } from './constants.js';
-import { updateAllRangeLabels, updateVCF, updateDelay, updateLFO, initRealTimeLfo } from './audioEngine.js';
+
+// --- BUG FIX: Imports were wrong! ---
+// Import UI helper from ui.js
+import { updateAllRangeLabels } from './ui.js';
+// Import audio helpers from audioEngine.js
+import { updateVCF, updateDelay, updateLFO, initRealTimeLfo } from './audioEngine.js';
+// --- END BUG FIX ---
+
 // We'll have a circular dependency if we import sequencer.js (for loadScale)
 // So, main.js will pass the loadScale function to us.
 
