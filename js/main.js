@@ -1,8 +1,6 @@
 /*
  * js/main.js
  * The central coordinator for the synthesizer.
- * Its only job is to import all the modules and
- * connect them with event listeners.
  */
 
 // Import Core State
@@ -10,28 +8,23 @@ import { audioCtx, audioNodes, state } from './state.js';
 
 // Import All Modules
 import { 
-    initializeGlobalAudioChain, updateVCF, updateDelay, initRealTimeLfo,
+    initializeGlobalAudioChain, updateVCF, updateDelayParams, initRealTimeLfo,
     updateLFO, startNote, stopNote 
 } from './audioEngine.js';
 
 import { startArpeggiator, stopArpeggiator } from './arpeggiator.js';
 
-// --- NEW ---
 import { 
-    initDistortion, updateDistortionAmount, toggleDistortion 
+    initDistortion, updateDistortionAmount, toggleDistortion,
+    toggleDelay, updateDelayMix, // New delay functions
+    initReverb, updateReverbMix, toggleReverb  // New reverb functions
 } from './effects.js';
-// --- END NEW ---
 
 import { initPatcher, loadSynthControls, loadPatch } from './patch.js';
-
-import { 
-    initRecorder, startRecording 
-} from './recorder.js';
-
+import { initRecorder, startRecording } from './recorder.js';
 import { 
     initSequencer, clearGrid, loadScale, startStopSequencer, 
-    startSequencer,
-    stopSequencer, setAdvanceSongFn, setStopSongFn 
+    startSequencer, stopSequencer, setAdvanceSongFn, setStopSongFn 
 } from './sequencer.js';
 
 import { 
@@ -64,7 +57,6 @@ function setupKeyMappings() {
         keyToMidi[key] = mappings[key];
     }
 }
-
 function updateHeldNotes(midiNote, isAdding) {
     const index = state.heldNotes.indexOf(midiNote);
     if (isAdding && index === -1) {
@@ -73,7 +65,6 @@ function updateHeldNotes(midiNote, isAdding) {
         state.heldNotes.splice(index, 1);
     }
     state.heldNotes.sort((a, b) => a - b);
-
     const arpMode = document.getElementById('arp-mode').value;
     if (arpMode !== 'off' && !state.isPlaying) {
         if (state.heldNotes.length > 0) {
@@ -83,17 +74,14 @@ function updateHeldNotes(midiNote, isAdding) {
         }
     }
 }
-
 function noteOn(midiNote) {
     if (state.isPlaying) return;
-    
     const arpMode = document.getElementById('arp-mode').value;
     if (arpMode === 'off') {
         startNote(midiNote);
     }
     updateHeldNotes(midiNote, true);
 }
-
 function noteOff(midiNote) {
     const arpMode = document.getElementById('arp-mode').value;
     if (arpMode === 'off') {
@@ -115,8 +103,9 @@ document.addEventListener('DOMContentLoaded', () => {
     setStopSongFn(stopSong);
 
     // --- 2. Initialize Systems ---
-    initializeGlobalAudioChain(); // This now builds the distortion nodes
-    initDistortion(); // This populates the distortion nodes with data
+    initializeGlobalAudioChain();
+    initDistortion();
+    initReverb(); // This is async, will load in background
     
     populatePatchSelector();
     populateScaleSelector();
@@ -126,11 +115,13 @@ document.addEventListener('DOMContentLoaded', () => {
     updateAllRangeLabels();
     updatePatternDisplay();
     setupKeyMappings();
-
+    
+    // Set initial pedal state from HTML
+    updateDelayMix(document.getElementById('delay-mix').value);
+    
     // --- 3. Attach All Event Listeners ---
 
-    // -- Audio Controls --
-    // (VCOs, ADSR, VCF, LFO, Delay, Master)
+    // -- Audio Controls (Synth) --
     document.getElementById('vco1-wave').onchange = (e) => state.vco1Wave = e.target.value;
     document.getElementById('vco2-wave').onchange = (e) => state.vco2Wave = e.target.value;
     document.getElementById('vco1-fine-tune').oninput = (e) => updateRangeLabel(e.target);
@@ -149,12 +140,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('lfo-vco1-depth').oninput = (e) => updateRangeLabel(e.target, ' semitones');
     document.getElementById('lfo-vco2-depth').oninput = (e) => updateRangeLabel(e.target, ' semitones');
     document.getElementById('noise-level').oninput = (e) => updateRangeLabel(e.target);
-    document.getElementById('delay-time').oninput = (e) => { updateDelay(); updateRangeLabel(e.target, 's'); };
-    document.getElementById('delay-feedback').oninput = (e) => { updateDelay(); updateRangeLabel(e.target); };
-    document.getElementById('delay-mix').oninput = (e) => { updateDelay(); updateRangeLabel(e.target); };
     document.getElementById('master-volume').oninput = (e) => { audioNodes.masterGainNode.gain.setValueAtTime(e.target.value, audioCtx.currentTime); updateRangeLabel(e.target); };
 
-    // -- Pedal Board Controls (NEW) --
+    // -- Pedal Board Controls --
+    // Distortion
     document.getElementById('distortion-amount').oninput = (e) => {
         updateDistortionAmount(e.target.value);
         updateRangeLabel(e.target);
@@ -162,13 +151,35 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('distortion-bypass-btn').onclick = (e) => {
         const btn = e.target;
         btn.classList.toggle('active');
-        if (btn.classList.contains('active')) {
-            btn.textContent = 'ON';
-            toggleDistortion(true);
-        } else {
-            btn.textContent = 'OFF';
-            toggleDistortion(false);
-        }
+        const isActive = btn.classList.contains('active');
+        btn.textContent = isActive ? 'ON' : 'OFF';
+        toggleDistortion(isActive);
+    };
+    
+    // Delay (Now with on/off and new mix logic)
+    document.getElementById('delay-time').oninput = (e) => { updateDelayParams(); updateRangeLabel(e.target, 's'); };
+    document.getElementById('delay-feedback').oninput = (e) => { updateDelayParams(); updateRangeLabel(e.target); };
+    document.getElementById('delay-mix').oninput = (e) => { updateDelayMix(e.target.value); updateRangeLabel(e.target); };
+    
+    document.getElementById('delay-bypass-btn').onclick = (e) => {
+        const btn = e.target;
+        btn.classList.toggle('active');
+        const isActive = btn.classList.contains('active');
+        btn.textContent = isActive ? 'ON' : 'OFF';
+        toggleDelay(isActive);
+    };
+
+    // Reverb (NEW)
+    document.getElementById('reverb-mix').oninput = (e) => {
+        updateReverbMix(e.target.value);
+        updateRangeLabel(e.target);
+    };
+    document.getElementById('reverb-bypass-btn').onclick = (e) => {
+        const btn = e.target;
+        btn.classList.toggle('active');
+        const isActive = btn.classList.contains('active');
+        btn.textContent = isActive ? 'ON' : 'OFF';
+        toggleReverb(isActive);
     };
     
     // -- Patch --
