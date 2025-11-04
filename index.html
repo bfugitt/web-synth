@@ -132,22 +132,6 @@
                     <input type="range" id="noise-level" min="0" max="1" step="0.01" value="0.00">
                 </div>
                 <div class="control-group" style="height: 100px;">
-                    </div>
-            </div>
-
-            <div class="synth-section" id="delay-section">
-                <h3>Delay Effect</h3>
-                <div class="control-group">
-                    <label for="delay-time">Time: <span id="delay-time-val">0.50s</span></label>
-                    <input type="range" id="delay-time" min="0.01" max="1.5" step="0.01" value="0.5">
-                </div>
-                <div class="control-group">
-                    <label for="delay-feedback">Feedback: <span id="delay-feedback-val">0.30</span></label>
-                    <input type="range" id="delay-feedback" min="0.0" max="0.95" step="0.01" value="0.3">
-                </div>
-                <div class="control-group">
-                    <label for="delay-mix">Mix (Wet/Dry): <span id="delay-mix-val">0.50</span></label>
-                    <input type="range" id="delay-mix" min="0.0" max="1.0" step="0.01" value="0.5">
                 </div>
             </div>
 
@@ -158,10 +142,57 @@
                     <input type="range" id="master-volume" min="0" max="1" step="0.01" value="0.7">
                 </div>
                 <div class="control-group" style="height: 100px;">
-                    </div>
+                </div>
             </div>
 
-        </div> <div class="synth-section" id="patch-section">
+            </div> <div class="synth-section" id="pedalboard-section">
+            <h3>Pedal Board</h3>
+            <div class="pedal-chain">
+                
+                <div class="pedal" id="distortion-pedal">
+                    <h4>DISTORTION</h4>
+                    <div class="pedal-controls">
+                        <div class="control-group">
+                            <label>Amount: <span id="distortion-amount-val">100</span></label>
+                            <input type="range" id="distortion-amount" min="0" max="400" step="1" value="100">
+                        </div>
+                    </div>
+                    <button class="pedal-bypass-btn" id="distortion-bypass-btn">OFF</button>
+                </div>
+
+                <div class="pedal" id="delay-pedal">
+                    <h4>DELAY</h4>
+                    <div class="pedal-controls">
+                        <div class="control-group">
+                            <label>Time: <span id="delay-time-val">0.5s</span></label>
+                            <input type="range" id="delay-time" min="0.01" max="1.5" step="0.01" value="0.5">
+                        </div>
+                        <div class="control-group">
+                            <label>Feedback: <span id="delay-feedback-val">0.3</span></label>
+                            <input type="range" id="delay-feedback" min="0.0" max="0.95" step="0.01" value="0.3">
+                        </div>
+                        <div class="control-group">
+                            <label>Mix: <span id="delay-mix-val">0.5</span></label>
+                            <input type="range" id="delay-mix" min="0" max="1" step="0.01" value="0.5">
+                        </div>
+                    </div>
+                    <button class="pedal-bypass-btn" id="delay-bypass-btn">OFF</button>
+                </div>
+
+                <div class="pedal" id="reverb-pedal">
+                    <h4>REVERB</h4>
+                    <div class="pedal-controls">
+                        <div class="control-group">
+                            <label>Mix (Wet/Dry): <span id="reverb-mix-val">0.5</span></label>
+                            <input type="range" id="reverb-mix" min="0" max="1" step="0.01" value="0.5">
+                        </div>
+                    </div>
+                    <button class="pedal-bypass-btn" id="reverb-bypass-btn">OFF</button>
+                </div>
+
+            </div>
+        </div>
+        <div class="synth-section" id="patch-section">
             <h3>Patch Bank (Presets)</h3>
             <div id="patch-controls" style="display: flex; justify-content: center; gap: 20px; align-items: center; flex-wrap: wrap;">
                 <label for="patch-selector" style="font-size: 1.1em; color: #e0e0e0; margin-bottom: 0;">Select Sound:</label>
@@ -267,65 +298,6 @@
 
     </div>
 
-
-
-<div class="synth-section" id="pedalboard-section">
-            <h3>Pedal Board</h3>
-            <div class="pedal-chain">
-
-                
-                <div class="pedal" id="distortion-pedal">
-                    <h4>DISTORTION</h4>
-                    <div class="pedal-controls">
-                        <div class="control-group">
-                            <label>Amount: <span id="distortion-amount-val">100</span></label>
-                            <input type="range" id="distortion-amount" min="0" max="400" step="1" value="100">
-                        </div>
-                    </div>
-                    <button class="pedal-bypass-btn" id="distortion-bypass-btn">OFF</button>
-                </div>
-
-<div class="pedal" id="delay-pedal">
-                    <h4>DELAY</h4>
-                    <div class="pedal-controls">
-                        <div class="control-group">
-                            <label>Time: <span id="delay-time-val">0.5s</span></label>
-                            <input type="range" id="delay-time" min="0.01" max="1.5" step="0.01" value="0.5">
-                        </div>
-                        <div class="control-group">
-                            <label>Feedback: <span id="delay-feedback-val">0.3</span></label>
-                            <input type="range" id="delay-feedback" min="0.0" max="0.95" step="0.01" value="0.3">
-                        </div>
-                    </div>
-                    <button class="pedal-bypass-btn" id="delay-bypass-btn">OFF</button>
-                </div>
-
-                <div class="pedal" id="reverb-pedal">
-                    <h4>REVERB</h4>
-                    <div class="pedal-controls">
-                        <div class="control-group">
-                            <label>Mix (Wet/Dry): <span id="reverb-mix-val">0.5</span></label>
-                            <input type="range" id="reverb-mix" min="0" max="1" step="0.01" value="0.5">
-                        </div>
-                    </div>
-                    <button class="pedal-bypass-btn" id="reverb-bypass-btn">OFF</button>
-                </div>    
-
-                
-
-                
-                </div>
-        </div>
-
-
-
-
-
-
-
-
-
-    
     <script type="module" src="js/main.js"></script>
 </body>
 </html>
