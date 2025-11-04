@@ -39,7 +39,7 @@ export function loadScale() {
     
     state.currentScaleNoteNames = state.currentScaleMidiNotes.map(midi => {
         const noteIndex = midi % 12;
-        const octave = Math.floor(midi / 12) - 1;
+        const octave = Math.floor(midi / 12) - 1; // MIDI C4 is Octave 4
         return `${MIDI_NOTE_NAMES[noteIndex]}${octave}`;
     });
 
@@ -52,21 +52,31 @@ function runStep() {
     const NUM_STEPS = 16;
     const NUM_ROWS = 8;
     
+    // 1. Check for Song Pattern Change (if playing song)
     if (state.isSongPlaying && state.currentStep === 0 && state.nextPatternToLoad) {
+        // Load the new pattern's state and sequence
         if (_loadSynthControls) _loadSynthControls(state.nextPatternToLoad.state);
         state.sequence = state.nextPatternToLoad.sequence.map(row => [...row]);
-        if (_createGrid) _createGrid();
+        if (_createGrid) _createGrid(); // Redraw grid with new pattern
         
+        // Update BPM
         const newBpm = parseInt(state.nextPatternToLoad.state.bpm) || 120;
         document.getElementById('bpm-input').value = newBpm;
         
+        // This is critical: restart the sequencer interval with the new BPM
         clearInterval(state.sequencerInterval);
-        startSequencer(true);
+        startSequencer(true); // Call with 'isSongContinue' flag
         
-        state.nextPatternToLoad = null;
-        return;
+        state.nextPatternToLoad = null; // Clear the flag
+        
+        // --- THIS WAS THE BUG ---
+        // We were returning here, skipping the "play notes" part for step 0
+        // By removing the 'return', we let the function continue and play step 0
+        // return; 
+        // --- END BUG FIX ---
     }
     
+    // 2. Stop notes from the *previous* step
     const prevStep = (state.currentStep - 1 + NUM_STEPS) % NUM_STEPS;
     for (let row = 0; row < NUM_ROWS; row++) {
         if (state.sequence[row][prevStep]) {
@@ -75,12 +85,14 @@ function runStep() {
         }
     }
 
+    // 3. Highlight current step
     document.querySelectorAll('.step.current').forEach(el => el.classList.remove('current'));
     const currentStepEls = document.querySelectorAll(`.step[data-step="${state.currentStep}"]`);
     currentStepEls.forEach(el => el.classList.add('current'));
 
+    // 4. Play notes for the *current* step
     const bpm = parseInt(document.getElementById('bpm-input').value) || 120;
-    const stepDurationMs = (60 / bpm / 4) * 1000;
+    const stepDurationMs = (60 / bpm / 4) * 1000; // 1/16th note duration
     
     const { mode: arpMode } = getArpParams();
     let notesToArp = [];
@@ -90,14 +102,18 @@ function runStep() {
             notesToArp.push(midiNote);
         }
     }
-    notesToArp.sort((a, b) => a - b);
+    notesToArp.sort((a, b) => a - b); // Arp needs sorted notes
 
+    // 5. Play Logic (Arp or simple notes)
     if (arpMode === 'off' || notesToArp.length === 0) {
+        // --- STANDARD SEQUENCER PLAY ---
         notesToArp.forEach(midiNote => {
             startNote(midiNote);
+            // Schedule note off
             setTimeout(() => stopNote(midiNote), stepDurationMs * 0.9);
         });
     } else {
+        // --- ARPEGGIATOR PLAY ---
         const { rateFactor, octaves, chordSequence } = getArpParams();
         const numArpNotesPerStep = rateFactor;
         const arpNoteDurationMs = stepDurationMs / numArpNotesPerStep;
@@ -121,12 +137,11 @@ function runStep() {
         }
     }
 
+    // 6. Advance step (and handle song looping)
     state.currentStep = (state.currentStep + 1) % NUM_STEPS;
     
     if (state.isSongPlaying && state.currentStep === 0) {
-        // We need to call advanceSongPattern...
-        // This is another circular dependency.
-        // We'll have main.js pass this function in.
+        // We are at the end of a pattern, advance the song
         if (_advanceSongPattern) _advanceSongPattern();
     }
 }
@@ -138,23 +153,24 @@ export function setAdvanceSongFn(fn) {
 }
 
 export function startSequencer(isSongContinue = false) {
-    if (state.isPlaying && !isSongContinue) return;
+    if (state.isPlaying && !isSongContinue) return; // Don't restart if already playing
     
     stopArpeggiator();
     
     state.isPlaying = true;
     if (!isSongContinue) {
-        state.currentStep = 0;
+        state.currentStep = 0; // Reset step only if it's a fresh play
     }
     
     const bpm = parseInt(document.getElementById('bpm-input').value) || 120;
-    const intervalTimeMs = (60 / bpm / 4) * 1000;
+    const intervalTimeMs = (60 / bpm / 4) * 1000; // 1/16th note interval
     
-    clearInterval(state.sequencerInterval);
+    clearInterval(state.sequencerInterval); // Clear any existing interval
     state.sequencerInterval = setInterval(runStep, intervalTimeMs);
     
     document.getElementById('play-btn').textContent = 'PAUSE';
     
+    // Play the first step immediately ONLY if it's a fresh start
     if (!isSongContinue) {
         runStep();
     }
@@ -173,6 +189,7 @@ export function startStopSequencer() {
     }
 
     if (state.isPlaying) {
+        // --- PAUSE ---
         state.isPlaying = false;
         clearInterval(state.sequencerInterval);
         document.getElementById('play-btn').textContent = 'PLAY';
@@ -189,6 +206,7 @@ export function startStopSequencer() {
         }
 
     } else {
+        // --- PLAY ---
         startSequencer();
     }
 }
