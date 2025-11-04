@@ -16,6 +16,12 @@ import {
 
 import { startArpeggiator, stopArpeggiator } from './arpeggiator.js';
 
+// --- NEW ---
+import { 
+    initDistortion, updateDistortionAmount, toggleDistortion 
+} from './effects.js';
+// --- END NEW ---
+
 import { initPatcher, loadSynthControls, loadPatch } from './patch.js';
 
 import { 
@@ -24,7 +30,7 @@ import {
 
 import { 
     initSequencer, clearGrid, loadScale, startStopSequencer, 
-    startSequencer, // This was our previous bug fix
+    startSequencer,
     stopSequencer, setAdvanceSongFn, setStopSongFn 
 } from './sequencer.js';
 
@@ -41,7 +47,6 @@ import {
 
 
 // --- Keyboard Interaction Logic ---
-// These functions are the "glue" between UI, Audio, and Arp
 const keyToMidi = {};
 function setupKeyMappings() {
     const base = () => state.baseOctave;
@@ -102,7 +107,6 @@ function noteOff(midiNote) {
 document.addEventListener('DOMContentLoaded', () => {
     
     // --- 1. Connect Modules ---
-    // Pass functions to modules that need them to avoid circular dependencies
     initPatcher(loadScale);
     initSequencer(loadSynthControls, createGrid, setupKeyMappings);
     initSong(stopSequencer, startSequencer);
@@ -111,10 +115,12 @@ document.addEventListener('DOMContentLoaded', () => {
     setStopSongFn(stopSong);
 
     // --- 2. Initialize Systems ---
-    initializeGlobalAudioChain();
+    initializeGlobalAudioChain(); // This now builds the distortion nodes
+    initDistortion(); // This populates the distortion nodes with data
+    
     populatePatchSelector();
     populateScaleSelector();
-    loadScale(); // This will also call createGrid
+    loadScale();
     createPianoKeys();
     initRealTimeLfo();
     updateAllRangeLabels();
@@ -124,6 +130,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- 3. Attach All Event Listeners ---
 
     // -- Audio Controls --
+    // (VCOs, ADSR, VCF, LFO, Delay, Master)
     document.getElementById('vco1-wave').onchange = (e) => state.vco1Wave = e.target.value;
     document.getElementById('vco2-wave').onchange = (e) => state.vco2Wave = e.target.value;
     document.getElementById('vco1-fine-tune').oninput = (e) => updateRangeLabel(e.target);
@@ -147,10 +154,27 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('delay-mix').oninput = (e) => { updateDelay(); updateRangeLabel(e.target); };
     document.getElementById('master-volume').oninput = (e) => { audioNodes.masterGainNode.gain.setValueAtTime(e.target.value, audioCtx.currentTime); updateRangeLabel(e.target); };
 
+    // -- Pedal Board Controls (NEW) --
+    document.getElementById('distortion-amount').oninput = (e) => {
+        updateDistortionAmount(e.target.value);
+        updateRangeLabel(e.target);
+    };
+    document.getElementById('distortion-bypass-btn').onclick = (e) => {
+        const btn = e.target;
+        btn.classList.toggle('active');
+        if (btn.classList.contains('active')) {
+            btn.textContent = 'ON';
+            toggleDistortion(true);
+        } else {
+            btn.textContent = 'OFF';
+            toggleDistortion(false);
+        }
+    };
+    
     // -- Patch --
     document.getElementById('load-patch-btn').onclick = () => {
         loadPatch();
-        clearGrid(); // Patches should clear the grid
+        clearGrid();
     };
 
     // -- Arp --
@@ -162,10 +186,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // -- Keyboard & UI --
     document.getElementById('octave-selector').onchange = (e) => {
         updateBaseOctave(e.target.value);
-        setupKeyMappings(); // Re-map keys when octave changes
+        setupKeyMappings();
     };
-    
-    // Attach listeners to piano keys (since they are now dumb elements)
     document.getElementById('piano-keys').addEventListener('mousedown', e => {
         if (e.target.classList.contains('key')) {
             noteOn(e.target.dataset.midi);
@@ -184,8 +206,6 @@ document.addEventListener('DOMContentLoaded', () => {
             e.target.classList.remove('active');
         }
     }, true);
-    
-    // PC Keyboard listeners
     document.addEventListener('keydown', (e) => {
         if (e.repeat) return;
         const key = e.key.toUpperCase();
@@ -196,8 +216,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     document.addEventListener('keyup', (e) => {
-        // --- THIS IS THE BUG FIX for "stuck keys" ---
-        const key = e.key.toUpperCase(); // Was .toUpperCase.toUpperCase()
+        const key = e.key.toUpperCase();
         if (keyToMidi[key]) {
             const midiNote = keyToMidi[key]();
             noteOff(midiNote);
@@ -214,12 +233,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // -- Song --
     document.getElementById('save-pattern-btn').onclick = savePattern;
     document.getElementById('play-song-btn').onclick = startStopSong;
-
-    // Attach listeners for pattern tiles (since they are now dumb elements)
     document.getElementById('pattern-display').addEventListener('click', e => {
         const tile = e.target.closest('.pattern-tile');
         if (!tile) return;
-
         const index = tile.dataset.index;
         if (e.target.classList.contains('delete-btn')) {
             deletePattern(index);
