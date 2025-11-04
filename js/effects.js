@@ -3,28 +3,13 @@
  * Handles all audio effects ("pedals").
  */
 import { audioCtx, audioNodes } from './state.js';
-
-// --- Distortion ---
-
-// Helper function to create the distortion "curve"
-function makeDistortionCurve(amount) {
-    let k = typeof amount === 'number' ? amount : 50,
-        n_samples = 44100,
-        curve = new Float32Array(n_samples),
-        deg = Math.PI / 180,
-        i = 0,
-        x;
-    for ( ; i < n_samples; ++i ) {
-        x = i * 2 / n_samples - 1;
-        curve[i] = ( 3 + k ) * x * 20 * deg / ( Math.PI + k * Math.abs(x) );
-    }
-    return curve;
-};
+// --- THIS IS THE BUG FIX ---
+// Import the helper function from its *correct* location
+import { makeDistortionCurve } from './audioEngine.js';
+// --- END BUG FIX ---
 
 // Initialize the distortion pedal
 export function initDistortion() {
-    // BUG FIX:
-    // DO NOT create new nodes here.
     // The nodes are already created by audioEngine.js.
     // We just need to set their initial values.
     
@@ -34,8 +19,6 @@ export function initDistortion() {
     audioNodes.distortion.waveShaper.oversample = '4x';
     
     // Default state is "off" (bypassed).
-    // This is already set in audioEngine.js, but
-    // we can confirm it here.
     audioNodes.distortion.wet.gain.value = 0;
     audioNodes.distortion.dry.gain.value = 1;
 }
