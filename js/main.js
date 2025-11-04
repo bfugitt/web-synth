@@ -16,8 +16,10 @@ import { startArpeggiator, stopArpeggiator } from './arpeggiator.js';
 
 import { 
     initDistortion, updateDistortionAmount, toggleDistortion,
-    toggleDelay, updateDelayMix, // New delay functions
-    initReverb, updateReverbMix, toggleReverb  // New reverb functions
+    toggleDelay, updateDelayMix,
+    initReverb, updateReverbMix, toggleReverb,
+    // NEW: Chorus functions
+    initChorus, updateChorusRate, updateChorusDepth, updateChorusMix, toggleChorus
 } from './effects.js';
 
 import { initPatcher, loadSynthControls, loadPatch } from './patch.js';
@@ -105,7 +107,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- 2. Initialize Systems ---
     initializeGlobalAudioChain();
     initDistortion();
-    initReverb(); // This is async, will load in background
+    initChorus(); // NEW
+    initReverb(); 
     
     populatePatchSelector();
     populateScaleSelector();
@@ -117,13 +120,14 @@ document.addEventListener('DOMContentLoaded', () => {
     setupKeyMappings();
     
     // Set initial pedal state from HTML
-    updateDelayMix(document.getElementById('delay-mix').value);
+    updateDelayMix(document.getElementById('delay-mix').value, false);
     
     // --- 3. Attach All Event Listeners ---
 
     // -- Audio Controls (Synth) --
     document.getElementById('vco1-wave').onchange = (e) => state.vco1Wave = e.target.value;
     document.getElementById('vco2-wave').onchange = (e) => state.vco2Wave = e.target.value;
+    // ... (rest of synth controls are unchanged) ...
     document.getElementById('vco1-fine-tune').oninput = (e) => updateRangeLabel(e.target);
     document.getElementById('vco1-level').oninput = (e) => updateRangeLabel(e.target);
     document.getElementById('vco2-fine-tune').oninput = (e) => updateRangeLabel(e.target);
@@ -156,11 +160,31 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleDistortion(isActive);
     };
     
-    // Delay (Now with on/off and new mix logic)
+    // Chorus (NEW)
+    document.getElementById('chorus-rate').oninput = (e) => {
+        updateChorusRate(e.target.value);
+        updateRangeLabel(e.target, ' Hz');
+    };
+    document.getElementById('chorus-depth').oninput = (e) => {
+        updateChorusDepth(e.target.value);
+        updateRangeLabel(e.target);
+    };
+    document.getElementById('chorus-mix').oninput = (e) => {
+        updateChorusMix(e.target.value);
+        updateRangeLabel(e.target);
+    };
+    document.getElementById('chorus-bypass-btn').onclick = (e) => {
+        const btn = e.target;
+        btn.classList.toggle('active');
+        const isActive = btn.classList.contains('active');
+        btn.textContent = isActive ? 'ON' : 'OFF';
+        toggleChorus(isActive);
+    };
+    
+    // Delay
     document.getElementById('delay-time').oninput = (e) => { updateDelayParams(); updateRangeLabel(e.target, 's'); };
     document.getElementById('delay-feedback').oninput = (e) => { updateDelayParams(); updateRangeLabel(e.target); };
     document.getElementById('delay-mix').oninput = (e) => { updateDelayMix(e.target.value); updateRangeLabel(e.target); };
-    
     document.getElementById('delay-bypass-btn').onclick = (e) => {
         const btn = e.target;
         btn.classList.toggle('active');
@@ -169,7 +193,7 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleDelay(isActive);
     };
 
-    // Reverb (NEW)
+    // Reverb
     document.getElementById('reverb-mix').oninput = (e) => {
         updateReverbMix(e.target.value);
         updateRangeLabel(e.target);
@@ -199,6 +223,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateBaseOctave(e.target.value);
         setupKeyMappings();
     };
+    // ... (rest of keyboard listeners are unchanged) ...
     document.getElementById('piano-keys').addEventListener('mousedown', e => {
         if (e.target.classList.contains('key')) {
             noteOn(e.target.dataset.midi);
