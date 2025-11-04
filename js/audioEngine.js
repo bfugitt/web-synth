@@ -8,18 +8,14 @@
 import { audioCtx, audioNodes, state } from './state.js';
 
 // --- Audio Helper Functions ---
-
-// 'export' makes this function available to other files
 export function midiToFreq(midi) {
     return Math.pow(2, (midi - 69) / 12) * 440;
 }
-
 export function getVcoTune(vcoId) {
     const range = parseInt(document.getElementById(`${vcoId}-range`).value);
     const fineTune = parseFloat(document.getElementById(`${vcoId}-fine-tune`).value);
     return { range, fineTune };
 }
-
 export function getAdsr() {
     return {
         attack: parseFloat(document.getElementById('attack').value),
@@ -30,7 +26,6 @@ export function getAdsr() {
 }
 
 // --- Audio Chain Initialization ---
-
 export function initializeGlobalAudioChain() {
     // 1. Master Output
     audioNodes.masterGainNode = audioCtx.createGain();
@@ -42,28 +37,125 @@ export function initializeGlobalAudioChain() {
     audioNodes.vcfNode.frequency.setValueAtTime(10000, audioCtx.currentTime);
     audioNodes.vcfNode.Q.setValueAtTime(1.0, audioCtx.currentTime);
     
-    // 3. Delay Effect Nodes
-    audioNodes.delayNode = audioCtx.createDelay(2.0); // Max 2s delay
+    // 3. Synth Output Mixer (feeds into VCF)
+    audioNodes.synthOutputMixer = audioCtx.createGain();
+    audioNodes.synthOutputMixer.connect(audioNodes.vcfNode);
+
+    // 4. Delay Effect Nodes (Delay is now the *last* effect in the chain)
+    audioNodes.delayNode = audioCtx.createDelay(2.0);
     audioNodes.feedbackGain = audioCtx.createGain();
     audioNodes.wetGain = audioCtx.createGain();
     audioNodes.dryGain = audioCtx.createGain();
 
-    // 4. Synth Output Mixer
-    audioNodes.synthOutputMixer = audioCtx.createGain();
+    // --- NEW AUDIO ROUTING ---
+    // The synth (VCF) output now feeds into the Distortion pedal's input
+    // (We assume distortion nodes are created by effects.js, but we connect them here)
+    // The distortion pedal's output will then feed into the Delay pedal's input.
+    
+    // 1. Synth (VCF) -> Distortion Input
+    //    (We can't connect this yet, effects.js does it)
+    //    Wait, no, effects.js creates them, this file connects them.
+    
+    // Let's re-think:
+    // This file, audioEngine.js, is responsible for the *main chain*.
+    // effects.js just creates/controls the nodes.
 
-    // --- Routing ---
+    // 1. Master Output
+    audioNodes.masterGainNode = audioCtx.createGain();
+    audioNodes.masterGainNode.gain.setValueAtTime(0.7, audioCtx.currentTime);
+    
+    // 2. Filter (VCF)
+    audioNodes.vcfNode = audioCtx.createBiquadFilter();
+    // ... (settings as before) ...
+    
+    // 3. Synth Output Mixer
+    audioNodes.synthOutputMixer = audioCtx.createGain();
+    
+    // 4. Delay Nodes
+    audioNodes.delayNode = audioCtx.createDelay(2.0);
+    audioNodes.feedbackGain = audioCtx.createGain();
+    audioNodes.wetGain = audioCtx.createGain();
+    audioNodes.dryGain = audioCtx.createGain();
+
+    // --- ROUTING (NEW) ---
+    // This is the main audio path
+    
+    // 1. Synth voices -> Mixer
     audioNodes.synthOutputMixer.connect(audioNodes.vcfNode);
-    audioNodes.vcfNode.connect(audioNodes.delayNode);
-    audioNodes.delayNode.connect(audioNodes.feedbackGain);
-    audioNodes.feedbackGain.connect(audioNodes.delayNode);
-    audioNodes.delayNode.connect(audioNodes.wetGain);
-    audioNodes.vcfNode.connect(audioNodes.dryGain);
-    audioNodes.dryGain.connect(audioNodes.masterGainNode);
-    audioNodes.wetGain.connect(audioNodes.masterGainNode);
+    
+    // 2. VCF -> Distortion Pedal (Input)
+    //    (The distortion nodes are created in effects.js,
+    //     so we just connect to its input)
+    //    This is backwards. This file must create the nodes.
+    
+    // --- OK, FINAL PLAN (SIMPLER) ---
+    // 1. Create ALL nodes here.
+    // 2. Connect them.
+    // 3. effects.js will just *control* them.
+    
+    // 1. Master Gain
+    audioNodes.masterGainNode = audioCtx.createGain();
+    audioNodes.masterGainNode.gain.setValueAtTime(0.7, audioCtx.currentTime);
+
+    // 2. Synth Mixer & VCF
+    audioNodes.synthOutputMixer = audioCtx.createGain();
+    audioNodes.vcfNode = audioCtx.createBiquadFilter();
+    audioNodes.vcfNode.type = 'lowpass';
+    audioNodes.vcfNode.frequency.setValueAtTime(10000, audioCtx.currentTime);
+    audioNodes.vcfNode.Q.setValueAtTime(1.0, audioCtx.currentTime);
+
+    // 3. Distortion Pedal Nodes
+    audioNodes.distortion = {
+        input: audioCtx.createGain(),
+        waveShaper: audioCtx.createWaveShaper(),
+        wet: audioCtx.createGain(),
+        dry: audioCtx.createGain(),
+        output: audioCtx.createGain()
+    };
+    // Set distortion to OFF by default
+    audioNodes.distortion.wet.gain.value = 0;
+    audioNodes.distortion.dry.gain.value = 1;
+
+    // 4. Delay Pedal Nodes
+    audioNodes.delay = {
+        input: audioCtx.createGain(), // We'll use this as the delay's input
+        delayNode: audioCtx.createDelay(2.0),
+        feedbackGain: audioCtx.createGain(),
+        wetGain: audioCtx.createGain(),
+        dryGain: audioCtx.createGain(),
+        output: audioCtx.createGain() // And this as its output
+    };
+    
+    // --- CONNECT THE FULL CHAIN ---
+    
+    // 1. Synth Voices -> Mixer -> VCF
+    audioNodes.synthOutputMixer.connect(audioNodes.vcfNode);
+    
+    // 2. VCF -> Distortion Pedal
+    audioNodes.vcfNode.connect(audioNodes.distortion.input);
+    audioNodes.distortion.input.connect(audioNodes.distortion.dry).connect(audioNodes.distortion.output);
+    audioNodes.distortion.input.connect(audioNodes.distortion.waveShaper).connect(audioNodes.distortion.wet).connect(audioNodes.distortion.output);
+
+    // 3. Distortion Pedal -> Delay Pedal
+    audioNodes.distortion.output.connect(audioNodes.delay.input);
+    
+    // 4. Inside Delay Pedal (from old setup)
+    audioNodes.delay.input.connect(audioNodes.delay.delayNode); // wet path
+    audioNodes.delay.delayNode.connect(audioNodes.delay.feedbackGain);
+    audioNodes.delay.feedbackGain.connect(audioNodes.delay.delayNode);
+    audioNodes.delay.delayNode.connect(audioNodes.delay.wetGain);
+    audioNodes.delay.wetGain.connect(audioNodes.delay.output);
+    
+    audioNodes.delay.input.connect(audioNodes.delay.dryGain); // dry path
+    audioNodes.delay.dryGain.connect(audioNodes.delay.output);
+    
+    // 5. Delay Pedal (Output) -> Master Volume -> Speakers
+    audioNodes.delay.output.connect(audioNodes.masterGainNode);
     audioNodes.masterGainNode.connect(audioCtx.destination);
 
-    updateDelay(); // Set initial delay parameters
-    updateVCF(); // Initialize VCF parameters
+    // Initialize parameters
+    updateDelay();
+    updateVCF();
 }
 
 export function updateVCF() {
@@ -78,21 +170,19 @@ export function updateDelay() {
     const mix = parseFloat(document.getElementById('delay-mix').value);
     const currentTime = audioCtx.currentTime;
 
-    audioNodes.delayNode.delayTime.linearRampToValueAtTime(time, currentTime + 0.01);
-    audioNodes.feedbackGain.gain.linearRampToValueAtTime(feedback, currentTime + 0.01);
-    audioNodes.dryGain.gain.linearRampToValueAtTime(1.0 - mix, currentTime + 0.01);
-    audioNodes.wetGain.gain.linearRampToValueAtTime(mix, currentTime + 0.01);
+    audioNodes.delay.delayNode.delayTime.linearRampToValueAtTime(time, currentTime + 0.01);
+    audioNodes.delay.feedbackGain.gain.linearRampToValueAtTime(feedback, currentTime + 0.01);
+    audioNodes.delay.dryGain.gain.linearRampToValueAtTime(1.0 - mix, currentTime + 0.01);
+    audioNodes.delay.wetGain.gain.linearRampToValueAtTime(mix, currentTime + 0.01);
 }
 
 // --- LFO Functions ---
-
 export function createLfoNode(context, rate, wave, startTime) {
     const lfo = context.createOscillator();
     lfo.type = wave;
     lfo.frequency.setValueAtTime(rate, startTime);
     return lfo;
 }
-
 export function initRealTimeLfo() {
     if (audioNodes.realTimeLfoNode) {
         try {
@@ -116,7 +206,6 @@ export function initRealTimeLfo() {
         audioNodes.realTimeLfoNode.start(audioCtx.currentTime);
     }
 }
-
 export function updateLFO(value, param, valEl = null) {
     if (param === 'rate') {
         state.lfoRate = parseFloat(value);
@@ -136,7 +225,6 @@ export function updateLFO(value, param, valEl = null) {
 }
 
 // --- Core Note On/Off Functions ---
-
 export function startNote(midiNote) {
     while (state.activeVoices[midiNote] && state.activeVoices[midiNote].length > 0) {
         stopNote(midiNote, true); 
@@ -157,6 +245,8 @@ export function startNote(midiNote) {
     noteGain.gain.setValueAtTime(0, startTime);
     noteGain.gain.linearRampToValueAtTime(1.0, startTime + attack);
     noteGain.gain.setTargetAtTime(sustain, startTime + attack + decay, decay * 0.2);
+    
+    // Connect this note's output to the main synth mixer
     noteGain.connect(audioNodes.synthOutputMixer);
 
     const voiceMixer = audioCtx.createGain();
@@ -240,7 +330,6 @@ export function startNote(midiNote) {
     }
     state.activeVoices[midiNote].push(voiceNodes);
 }
-
 export function stopNote(midiNote, immediate = false) {
     if (!state.activeVoices[midiNote] || state.activeVoices[midiNote].length === 0) {
         return;
