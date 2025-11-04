@@ -4,10 +4,28 @@
  */
 import { audioCtx, audioNodes } from './state.js';
 import { makeDistortionCurve } from './audioEngine.js';
-// --- THIS IS THE FIX ---
-// Import our new Base64 data constant
 import { REVERB_IR_BASE64 } from './constants.js';
+
+// --- THIS IS THE FIX ---
+// Helper function to decode a Base64 string into an ArrayBuffer
+function _base64ToArrayBuffer(base64) {
+    // 1. Get the raw base64 data (remove the 'data:audio/wav;base64,' prefix)
+    const base64Data = base64.split(',')[1];
+    // 2. Convert from base64 to a "binary" string
+    const binaryString = window.atob(base64Data);
+    // 3. Get the length of that string
+    const len = binaryString.length;
+    // 4. Create an array of 8-bit integers (a byte array)
+    const bytes = new Uint8Array(len);
+    // 5. Loop through and store the character codes of each character
+    for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+    }
+    // 6. Return the underlying ArrayBuffer
+    return bytes.buffer;
+}
 // --- END FIX ---
+
 
 // --- Distortion ---
 
@@ -65,28 +83,21 @@ export function updateDelayMix(mix) {
 
 // --- Reverb (NEW) ---
 
-// We must load the audio file before we can use the reverb
-// 'async' means this function can 'await' the file download
 export async function initReverb() {
     console.log('Loading Reverb Impulse Response...');
     try {
         // --- THIS IS THE FIX ---
-        // Instead of fetching a dead link, we fetch our Base64 data
-        const response = await fetch(REVERB_IR_BASE64);
+        // 1. Decode the Base64 string into an ArrayBuffer
+        const audioData = _base64ToArrayBuffer(REVERB_IR_BASE64);
         // --- END FIX ---
 
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const audioData = await response.arrayBuffer();
-        
-        // Decode the audio file into a buffer
+        // 2. Decode the ArrayBuffer into an AudioBuffer
         const buffer = await audioCtx.decodeAudioData(audioData);
         
-        // Set the convolver's buffer to our new sound
+        // 3. Set the convolver's buffer to our new sound
         audioNodes.reverb.convolver.buffer = buffer;
         
-        // Set initial mix
+        // 4. Set initial mix
         const initialMix = document.getElementById('reverb-mix').value;
         updateReverbMix(initialMix);
         
