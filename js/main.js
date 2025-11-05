@@ -21,7 +21,8 @@ import {
     initChorus, updateChorusRate, updateChorusDepth, updateChorusMix, toggleChorus
 } from './effects.js';
 
-import { initPatcher, loadSynthControls, loadPatch } from './patch.js';
+// --- THIS IS THE CHANGE (Adding getAllSynthState) ---
+import { initPatcher, loadSynthControls, loadPatch, getAllSynthState } from './patch.js';
 import { initRecorder, startRecording } from './recorder.js';
 import { 
     initSequencer, clearGrid, loadScale, startStopSequencer, 
@@ -40,7 +41,7 @@ import {
 } from './ui.js';
 
 
-// --- Keyboard Interaction Logic ---
+// --- Keyboard Interaction Logic (Unchanged) ---
 const keyToMidi = {};
 function setupKeyMappings() {
     const base = () => state.baseOctave;
@@ -95,8 +96,7 @@ function noteOff(midiNote) {
 // --- Main Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
     
-    // --- THIS IS THE FIX for the "AudioContext" warning ---
-    // A one-time listener to resume the AudioContext on the first user click.
+    // Resume Audio Context on first click
     function resumeAudio() {
         if (audioCtx.state === 'suspended') {
             audioCtx.resume();
@@ -107,9 +107,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     document.body.addEventListener('click', resumeAudio);
     document.body.addEventListener('touchstart', resumeAudio);
-    // --- END FIX ---
-
-    // --- 1. Connect Modules ---
+    
+    // Connect Modules
     initPatcher(loadScale);
     initSequencer(loadSynthControls, createGrid, setupKeyMappings);
     initSong(stopSequencer, startSequencer);
@@ -117,12 +116,11 @@ document.addEventListener('DOMContentLoaded', () => {
     setAdvanceSongFn(advanceSongPattern);
     setStopSongFn(stopSong);
 
-    // --- 2. Initialize Systems ---
-    initializeGlobalAudioChain(); // This sets all pedals to OFF
+    // Initialize Systems
+    initializeGlobalAudioChain();
     initDistortion();
     initChorus();
     initReverb(); 
-    
     populatePatchSelector();
     populateScaleSelector();
     loadScale();
@@ -132,14 +130,11 @@ document.addEventListener('DOMContentLoaded', () => {
     updatePatternDisplay();
     setupKeyMappings();
     
-    // --- THIS IS THE FIX for the "Delay On" bug ---
-    // The buggy line below is now removed.
-    // updateDelayMix(document.getElementById('delay-mix').value, false); 
     
     // --- 3. Attach All Event Listeners ---
-    // (All listeners below are unchanged)
 
     // -- Audio Controls (Synth) --
+    // ... (All your existing synth listeners) ...
     document.getElementById('vco1-wave').onchange = (e) => state.vco1Wave = e.target.value;
     document.getElementById('vco2-wave').onchange = (e) => state.vco2Wave = e.target.value;
     document.getElementById('vco1-fine-tune').oninput = (e) => updateRangeLabel(e.target);
@@ -161,7 +156,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('master-volume').oninput = (e) => { audioNodes.masterGainNode.gain.setValueAtTime(e.target.value, audioCtx.currentTime); updateRangeLabel(e.target); };
 
     // -- Pedal Board Controls --
-    // Distortion
+    // ... (All your existing pedal listeners) ...
     document.getElementById('distortion-amount').oninput = (e) => {
         updateDistortionAmount(e.target.value);
         updateRangeLabel(e.target);
@@ -173,8 +168,6 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.textContent = isActive ? 'ON' : 'OFF';
         toggleDistortion(isActive);
     };
-    
-    // Chorus
     document.getElementById('chorus-rate').oninput = (e) => {
         updateChorusRate(e.target.value);
         updateRangeLabel(e.target, ' Hz');
@@ -194,8 +187,6 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.textContent = isActive ? 'ON' : 'OFF';
         toggleChorus(isActive);
     };
-    
-    // Delay
     document.getElementById('delay-time').oninput = (e) => { updateDelayParams(); updateRangeLabel(e.target, 's'); };
     document.getElementById('delay-feedback').oninput = (e) => { updateDelayParams(); updateRangeLabel(e.target); };
     document.getElementById('delay-mix').oninput = (e) => { updateDelayMix(e.target.value); updateRangeLabel(e.target); };
@@ -206,8 +197,6 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.textContent = isActive ? 'ON' : 'OFF';
         toggleDelay(isActive);
     };
-
-    // Reverb
     document.getElementById('reverb-mix').oninput = (e) => {
         updateReverbMix(e.target.value);
         updateRangeLabel(e.target);
@@ -226,13 +215,38 @@ document.addEventListener('DOMContentLoaded', () => {
         clearGrid();
     };
 
+    // --- THIS IS THE NEW LISTENER ---
+    document.getElementById('export-patch-btn').onclick = () => {
+        try {
+            const currentPatch = getAllSynthState();
+            // Format it nicely with 2-space indents
+            const patchString = JSON.stringify(currentPatch, null, 2);
+            
+            // Use the modern clipboard API
+            navigator.clipboard.writeText(patchString)
+                .then(() => {
+                    alert('Patch settings copied to clipboard!');
+                })
+                .catch(err => {
+                    console.error('Failed to copy patch: ', err);
+                    alert('Failed to copy patch. See console for details.');
+                });
+        } catch (e) {
+            console.error('Error exporting patch:', e);
+            alert('Error exporting patch. See console for details.');
+        }
+    };
+    // --- END NEW LISTENER ---
+
     // -- Arp --
+    // ... (All your existing arp listeners) ...
     document.getElementById('arp-mode').onchange = startArpeggiator;
     document.getElementById('arp-rate').onchange = startArpeggiator;
     document.getElementById('arp-chords').onchange = startArpeggiator;
     document.getElementById('arp-octaves').onchange = startArpeggiator;
 
     // -- Keyboard & UI --
+    // ... (All your existing keyboard listeners) ...
     document.getElementById('octave-selector').onchange = (e) => {
         updateBaseOctave(e.target.value);
         setupKeyMappings();
@@ -274,12 +288,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // -- Sequencer & Transport --
+    // ... (All your existing transport listeners) ...
     document.getElementById('scale-selector').onchange = loadScale;
     document.getElementById('play-btn').onclick = startStopSequencer;
     document.getElementById('stop-btn').onclick = stopSequencer;
     document.getElementById('clear-btn').onclick = clearGrid;
     
     // -- Song --
+    // ... (All your existing song listeners) ...
     document.getElementById('save-pattern-btn').onclick = savePattern;
     document.getElementById('play-song-btn').onclick = startStopSong;
     document.getElementById('pattern-display').addEventListener('click', e => {
