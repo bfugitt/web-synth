@@ -21,7 +21,6 @@ import {
     initChorus, updateChorusRate, updateChorusDepth, updateChorusMix, toggleChorus
 } from './effects.js';
 
-// --- THIS IS THE CHANGE (Adding getAllSynthState) ---
 import { initPatcher, loadSynthControls, loadPatch, getAllSynthState } from './patch.js';
 import { initRecorder, startRecording } from './recorder.js';
 import { 
@@ -134,7 +133,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- 3. Attach All Event Listeners ---
 
     // -- Audio Controls (Synth) --
-    // ... (All your existing synth listeners) ...
     document.getElementById('vco1-wave').onchange = (e) => state.vco1Wave = e.target.value;
     document.getElementById('vco2-wave').onchange = (e) => state.vco2Wave = e.target.value;
     document.getElementById('vco1-fine-tune').oninput = (e) => updateRangeLabel(e.target);
@@ -156,7 +154,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('master-volume').oninput = (e) => { audioNodes.masterGainNode.gain.setValueAtTime(e.target.value, audioCtx.currentTime); updateRangeLabel(e.target); };
 
     // -- Pedal Board Controls --
-    // ... (All your existing pedal listeners) ...
     document.getElementById('distortion-amount').oninput = (e) => {
         updateDistortionAmount(e.target.value);
         updateRangeLabel(e.target);
@@ -215,17 +212,41 @@ document.addEventListener('DOMContentLoaded', () => {
         clearGrid();
     };
 
-    // --- THIS IS THE NEW LISTENER ---
+    // --- THIS IS THE UPDATED LISTENER ---
     document.getElementById('export-patch-btn').onclick = () => {
+        // 1. Prompt for a name
+        const patchName = window.prompt("Enter a name for this patch (e.g., 'my_awesome_pad'):");
+        
+        // 2. Check if the user cancelled
+        if (!patchName || patchName.trim() === "") {
+            alert("Export cancelled.");
+            return;
+        }
+
+        // 3. Sanitize the name into a safe JavaScript key
+        // "My Awesome Pad" becomes "my_awesome_pad"
+        const patchKey = patchName.trim()
+            .toLowerCase()
+            .replace(/\s+/g, '_') // Replace spaces with underscores
+            .replace(/[^a-zA-Z0-9_]/g, ''); // Remove all other non-alphanumeric chars
+
+        if (!patchKey) {
+            alert("Invalid name. Please use letters and numbers.");
+            return;
+        }
+
         try {
+            // 4. Get the patch object
             const currentPatch = getAllSynthState();
-            // Format it nicely with 2-space indents
-            const patchString = JSON.stringify(currentPatch, null, 2);
+            const patchObjectString = JSON.stringify(currentPatch, null, 2);
             
-            // Use the modern clipboard API
-            navigator.clipboard.writeText(patchString)
+            // 5. Format the final string exactly as requested
+            const finalPatchString = `${patchKey}: ${patchObjectString},`;
+
+            // 6. Use the modern clipboard API
+            navigator.clipboard.writeText(finalPatchString)
                 .then(() => {
-                    alert('Patch settings copied to clipboard!');
+                    alert(`Patch '${patchKey}' copied to clipboard!\n\nReady to paste into constants.js`);
                 })
                 .catch(err => {
                     console.error('Failed to copy patch: ', err);
@@ -236,17 +257,15 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Error exporting patch. See console for details.');
         }
     };
-    // --- END NEW LISTENER ---
+    // --- END UPDATED LISTENER ---
 
     // -- Arp --
-    // ... (All your existing arp listeners) ...
     document.getElementById('arp-mode').onchange = startArpeggiator;
     document.getElementById('arp-rate').onchange = startArpeggiator;
     document.getElementById('arp-chords').onchange = startArpeggiator;
     document.getElementById('arp-octaves').onchange = startArpeggiator;
 
     // -- Keyboard & UI --
-    // ... (All your existing keyboard listeners) ...
     document.getElementById('octave-selector').onchange = (e) => {
         updateBaseOctave(e.target.value);
         setupKeyMappings();
@@ -288,14 +307,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // -- Sequencer & Transport --
-    // ... (All your existing transport listeners) ...
     document.getElementById('scale-selector').onchange = loadScale;
     document.getElementById('play-btn').onclick = startStopSequencer;
     document.getElementById('stop-btn').onclick = stopSequencer;
     document.getElementById('clear-btn').onclick = clearGrid;
     
     // -- Song --
-    // ... (All your existing song listeners) ...
     document.getElementById('save-pattern-btn').onclick = savePattern;
     document.getElementById('play-song-btn').onclick = startStopSong;
     document.getElementById('pattern-display').addEventListener('click', e => {
