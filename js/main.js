@@ -15,7 +15,11 @@ import {
 import { startArpeggiator, stopArpeggiator } from './arpeggiator.js';
 
 import { 
-    initDistortion, updateDistortionAmount, toggleDistortion,
+    initDistortion, 
+    // --- THIS IS THE FIX ---
+    updateDistortionAmount, // <-- This was missing!
+    // --- END FIX ---
+    toggleDistortion,
     toggleDelay, updateDelayMix,
     initReverb, updateReverbMix, toggleReverb,
     initChorus, updateChorusRate, updateChorusDepth, updateChorusMix, toggleChorus
@@ -154,8 +158,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('master-volume').oninput = (e) => { audioNodes.masterGainNode.gain.setValueAtTime(e.target.value, audioCtx.currentTime); updateRangeLabel(e.target); };
 
     // -- Pedal Board Controls --
+    // Distortion
     document.getElementById('distortion-amount').oninput = (e) => {
-        updateDistortionAmount(e.target.value);
+        updateDistortionAmount(e.target.value); // This will now work
         updateRangeLabel(e.target);
     };
     document.getElementById('distortion-bypass-btn').onclick = (e) => {
@@ -165,6 +170,8 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.textContent = isActive ? 'ON' : 'OFF';
         toggleDistortion(isActive);
     };
+    
+    // Chorus
     document.getElementById('chorus-rate').oninput = (e) => {
         updateChorusRate(e.target.value);
         updateRangeLabel(e.target, ' Hz');
@@ -184,6 +191,8 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.textContent = isActive ? 'ON' : 'OFF';
         toggleChorus(isActive);
     };
+    
+    // Delay
     document.getElementById('delay-time').oninput = (e) => { updateDelayParams(); updateRangeLabel(e.target, 's'); };
     document.getElementById('delay-feedback').oninput = (e) => { updateDelayParams(); updateRangeLabel(e.target); };
     document.getElementById('delay-mix').oninput = (e) => { updateDelayMix(e.target.value); updateRangeLabel(e.target); };
@@ -194,6 +203,8 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.textContent = isActive ? 'ON' : 'OFF';
         toggleDelay(isActive);
     };
+
+    // Reverb
     document.getElementById('reverb-mix').oninput = (e) => {
         updateReverbMix(e.target.value);
         updateRangeLabel(e.target);
@@ -212,38 +223,25 @@ document.addEventListener('DOMContentLoaded', () => {
         clearGrid();
     };
 
-    // --- THIS IS THE UPDATED LISTENER ---
+    // -- Export Patch --
     document.getElementById('export-patch-btn').onclick = () => {
-        // 1. Prompt for a name
         const patchName = window.prompt("Enter a name for this patch (e.g., 'my_awesome_pad'):");
-        
-        // 2. Check if the user cancelled
         if (!patchName || patchName.trim() === "") {
             alert("Export cancelled.");
             return;
         }
-
-        // 3. Sanitize the name into a safe JavaScript key
-        // "My Awesome Pad" becomes "my_awesome_pad"
         const patchKey = patchName.trim()
             .toLowerCase()
-            .replace(/\s+/g, '_') // Replace spaces with underscores
-            .replace(/[^a-zA-Z0-9_]/g, ''); // Remove all other non-alphanumeric chars
-
+            .replace(/\s+/g, '_')
+            .replace(/[^a-zA-Z0-9_]/g, '');
         if (!patchKey) {
             alert("Invalid name. Please use letters and numbers.");
             return;
         }
-
         try {
-            // 4. Get the patch object
             const currentPatch = getAllSynthState();
             const patchObjectString = JSON.stringify(currentPatch, null, 2);
-            
-            // 5. Format the final string exactly as requested
             const finalPatchString = `${patchKey}: ${patchObjectString},`;
-
-            // 6. Use the modern clipboard API
             navigator.clipboard.writeText(finalPatchString)
                 .then(() => {
                     alert(`Patch '${patchKey}' copied to clipboard!\n\nReady to paste into constants.js`);
@@ -257,7 +255,6 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Error exporting patch. See console for details.');
         }
     };
-    // --- END UPDATED LISTENER ---
 
     // -- Arp --
     document.getElementById('arp-mode').onchange = startArpeggiator;
