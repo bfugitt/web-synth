@@ -27,40 +27,29 @@ export function initPatcher(loadScaleFn) {
     _loadScale = loadScaleFn;
 }
 
-// --- NEW HELPER FUNCTIONS ---
-/**
- * Gets a random float between min and max, rounded to a given step.
- */
+// --- Helper Functions (Unchanged) ---
 function _getRandomValue(min, max, step = 0.01) {
     const range = max - min;
     const val = Math.random() * range + min;
     return parseFloat((Math.round(val / step) * step).toFixed(2));
 }
-
-/**
- * Gets a random integer between min and max (inclusive).
- */
 function _getRandomInt(min, max) {
     min = Math.ceil(min);
     max = Math.floor(max);
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
-
-/**
- * Picks a random item from an array.
- */
 function _getRandomChoice(array) {
     return array[Math.floor(Math.random() * array.length)];
 }
-// --- END NEW HELPERS ---
+// --- END HELPERS ---
 
 
-// --- NEW RANDOMIZE PATCH FUNCTION ---
+// --- UPDATED RANDOMIZE PATCH FUNCTION ---
 export function randomizePatch() {
     // 1. Core Synth Parameters
     const newPatch = {
         vco1_wave: _getRandomChoice(['sawtooth', 'square', 'sine', 'triangle']),
-        vco1_range: _getRandomChoice(['-12', '0', '12', '24']), // Weighted towards usable ranges
+        vco1_range: _getRandomChoice(['-12', '0', '12', '24']),
         vco1_fine_tune: _getRandomValue(-0.2, 0.2).toString(),
         vco1_level: _getRandomValue(0.4, 0.9).toString(),
         
@@ -79,15 +68,24 @@ export function randomizePatch() {
 
         lfo_rate: _getRandomValue(2, 8, 0.05).toString(),
         lfo_wave: _getRandomChoice(['sine', 'triangle', 'sawtooth', 'square']),
-        lfo_vcf_depth: _getRandomInt(0, 800).toString(),
-        lfo_vco1_depth: _getRandomValue(0, 6, 0.1).toString(),
-        lfo_vco2_depth: _getRandomValue(0, 6, 0.1).toString(),
+
+        // --- THIS IS THE FIX ---
+        // Only turn on LFO modulation some of the time.
+        // 40% chance to modulate the filter
+        lfo_vcf_depth: (Math.random() < 0.4) ? _getRandomInt(100, 800).toString() : "0", 
+        
+        // 30% chance to modulate VCO1 pitch
+        lfo_vco1_depth: (Math.random() < 0.3) ? _getRandomValue(0.1, 6, 0.1).toString() : "0.0",
+        
+        // 30% chance to modulate VCO2 pitch
+        lfo_vco2_depth: (Math.random() < 0.3) ? _getRandomValue(0.1, 6, 0.1).toString() : "0.0",
+        // --- END FIX ---
 
         noise_level: _getRandomValue(0, 0.15).toString(),
         
         // 2. Effects (50% chance for each)
         distortion_on: Math.random() < 0.5,
-        distortion_amount: _getRandomInt(50, 200).toString(), // Moderate distortion
+        distortion_amount: _getRandomInt(50, 200).toString(),
         
         chorus_on: Math.random() < 0.5,
         chorus_rate: _getRandomValue(1.0, 4.0, 0.1).toString(),
@@ -116,7 +114,7 @@ export function randomizePatch() {
     // 4. Load the new patch!
     loadSynthControls(newPatch);
 }
-// --- END NEW FUNCTION ---
+// --- END UPDATED FUNCTION ---
 
 
 function isPedalOn(id) {
@@ -229,7 +227,6 @@ export function loadSynthControls(patchState) {
     ];
 
     controls.forEach(control => {
-        // Use a fallback for keys that might not be in older patches (like 'chorus_on')
         const value = patchState[control.key];
         if (value !== undefined) {
             const el = document.getElementById(control.id);
@@ -245,7 +242,7 @@ export function loadSynthControls(patchState) {
     state.baseOctave = parseInt(patchState.baseOctave) || 60;
     
     // Update labels and audio engine
-    updateAllRangeLabels(); // This is crucial to make the knobs/sliders update their text
+    updateAllRangeLabels();
     updateVCF();
     updateDelayParams();
     updateLFO(patchState.lfo_rate, 'rate');
