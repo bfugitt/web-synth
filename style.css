@@ -483,3 +483,24 @@ input[type="range"]::-webkit-slider-thumb {
 #randomize-btn:hover {
     transform: translateY(-1px);
 }
+
+/* --- Randomize Patch Button Style --- */
+#randomize-patch-btn {
+    padding: 8px 12px;
+    font-size: 1.5em; /* Make the dice emoji bigger */
+    line-height: 1;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: background-color 0.1s, transform 0.1s;
+    background-color: #6c757d; /* Neutral gray */
+    color: white;
+}
+#randomize-patch-btn:hover {
+    background-color: #5a6268;
+    transform: translateY(-1px);
+}
+#randomize-patch-btn:active {
+    transform: translateY(1px);
+}
