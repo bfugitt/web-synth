@@ -21,16 +21,19 @@ import {
     initChorus, updateChorusRate, updateChorusDepth, updateChorusMix, toggleChorus
 } from './effects.js';
 
-import { initPatcher, loadSynthControls, loadPatch, getAllSynthState } from './patch.js';
-import { initRecorder, startRecording } from './recorder.js';
-
 // --- THIS IS A CHANGE ---
+import { 
+    initPatcher, loadSynthControls, loadPatch, getAllSynthState,
+    randomizePatch // <-- IMPORT OUR NEW FUNCTION
+} from './patch.js';
+// --- END CHANGE ---
+
+import { initRecorder, startRecording } from './recorder.js';
 import { 
     initSequencer, clearGrid, loadScale, startStopSequencer, 
     startSequencer, stopSequencer, setAdvanceSongFn, setStopSongFn,
-    randomizeSequence // <-- IMPORT OUR NEW FUNCTION
+    randomizeSequence
 } from './sequencer.js';
-// --- END CHANGE ---
 
 import { 
     initSong, savePattern, deletePattern, loadPattern, 
@@ -215,6 +218,10 @@ document.addEventListener('DOMContentLoaded', () => {
         loadPatch();
         clearGrid();
     };
+    
+    // --- NEW LISTENER ---
+    document.getElementById('randomize-patch-btn').onclick = randomizePatch;
+    // --- END NEW LISTENER ---
 
     // -- Export Patch --
     document.getElementById('export-patch-btn').onclick = () => {
@@ -301,13 +308,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('play-btn').onclick = startStopSequencer;
     document.getElementById('stop-btn').onclick = stopSequencer;
     document.getElementById('clear-btn').onclick = clearGrid;
-    
-    // --- NEW LISTENERS ---
     document.getElementById('randomize-btn').onclick = randomizeSequence;
     document.getElementById('random-amount').oninput = (e) => {
         updateRangeLabel(e.target);
     };
-    // --- END NEW LISTENERS ---
     
     // -- Song --
     document.getElementById('save-pattern-btn').onclick = savePattern;
