@@ -15,15 +15,10 @@ import {
 
 // Import ALL effects functions
 import { 
-    toggleDistortion, 
-    toggleDelay, 
-    toggleReverb, 
-    updateDelayMix, 
-    updateReverbMix,
-    toggleChorus, // NEW
-    updateChorusRate, // NEW
-    updateChorusDepth, // NEW
-    updateChorusMix // NEW
+    toggleDistortion, updateDistortionAmount,
+    toggleDelay, updateDelayMix,
+    toggleReverb, updateReverbMix,
+    toggleChorus, updateChorusRate, updateChorusDepth, updateChorusMix
 } from './effects.js';
 
 
@@ -31,6 +26,98 @@ let _loadScale;
 export function initPatcher(loadScaleFn) {
     _loadScale = loadScaleFn;
 }
+
+// --- NEW HELPER FUNCTIONS ---
+/**
+ * Gets a random float between min and max, rounded to a given step.
+ */
+function _getRandomValue(min, max, step = 0.01) {
+    const range = max - min;
+    const val = Math.random() * range + min;
+    return parseFloat((Math.round(val / step) * step).toFixed(2));
+}
+
+/**
+ * Gets a random integer between min and max (inclusive).
+ */
+function _getRandomInt(min, max) {
+    min = Math.ceil(min);
+    max = Math.floor(max);
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+/**
+ * Picks a random item from an array.
+ */
+function _getRandomChoice(array) {
+    return array[Math.floor(Math.random() * array.length)];
+}
+// --- END NEW HELPERS ---
+
+
+// --- NEW RANDOMIZE PATCH FUNCTION ---
+export function randomizePatch() {
+    // 1. Core Synth Parameters
+    const newPatch = {
+        vco1_wave: _getRandomChoice(['sawtooth', 'square', 'sine', 'triangle']),
+        vco1_range: _getRandomChoice(['-12', '0', '12', '24']), // Weighted towards usable ranges
+        vco1_fine_tune: _getRandomValue(-0.2, 0.2).toString(),
+        vco1_level: _getRandomValue(0.4, 0.9).toString(),
+        
+        vco2_wave: _getRandomChoice(['sawtooth', 'square', 'sine', 'triangle']),
+        vco2_range: _getRandomChoice(['-12', '0', '12', '24']),
+        vco2_fine_tune: _getRandomValue(-0.2, 0.2).toString(),
+        vco2_level: _getRandomValue(0.4, 0.9).toString(),
+
+        attack: _getRandomValue(0.01, 0.4).toString(),
+        decay: _getRandomValue(0.1, 0.6).toString(),
+        sustain: _getRandomValue(0.3, 0.8).toString(),
+        release: _getRandomValue(0.2, 1.0, 0.05).toString(),
+
+        cutoff: _getRandomInt(300, 6000).toString(),
+        resonance: _getRandomValue(1.0, 5.0, 0.1).toString(),
+
+        lfo_rate: _getRandomValue(2, 8, 0.05).toString(),
+        lfo_wave: _getRandomChoice(['sine', 'triangle', 'sawtooth', 'square']),
+        lfo_vcf_depth: _getRandomInt(0, 800).toString(),
+        lfo_vco1_depth: _getRandomValue(0, 6, 0.1).toString(),
+        lfo_vco2_depth: _getRandomValue(0, 6, 0.1).toString(),
+
+        noise_level: _getRandomValue(0, 0.15).toString(),
+        
+        // 2. Effects (50% chance for each)
+        distortion_on: Math.random() < 0.5,
+        distortion_amount: _getRandomInt(50, 200).toString(), // Moderate distortion
+        
+        chorus_on: Math.random() < 0.5,
+        chorus_rate: _getRandomValue(1.0, 4.0, 0.1).toString(),
+        chorus_depth: _getRandomValue(0.3, 0.7).toString(),
+        chorus_mix: _getRandomValue(0.3, 0.5).toString(),
+        
+        delay_on: Math.random() < 0.5,
+        delay_time: _getRandomValue(0.1, 0.5, 0.01).toString(),
+        delay_feedback: _getRandomValue(0.2, 0.5).toString(),
+        delay_mix: _getRandomValue(0.3, 0.5).toString(),
+        
+        reverb_on: Math.random() < 0.5,
+        reverb_mix: _getRandomValue(0.3, 0.5).toString(),
+        
+        // 3. Set non-randomized (safe) defaults
+        master_volume: "0.7",
+        baseOctave: "60",
+        scale_key: document.getElementById('scale-selector').value,
+        bpm: document.getElementById('bpm-input').value,
+        arp_mode: "off",
+        arp_rate: "1",
+        arp_chords: "held_notes",
+        arp_octaves: "2",
+    };
+
+    // 4. Load the new patch!
+    loadSynthControls(newPatch);
+}
+// --- END NEW FUNCTION ---
+
 
 function isPedalOn(id) {
     const btn = document.getElementById(id);
@@ -72,18 +159,14 @@ export function getAllSynthState() {
         // Pedal States
         distortion_amount: document.getElementById('distortion-amount').value,
         distortion_on: isPedalOn('distortion-bypass-btn'),
-        
-        // NEW: Chorus
         chorus_rate: document.getElementById('chorus-rate').value,
         chorus_depth: document.getElementById('chorus-depth').value,
         chorus_mix: document.getElementById('chorus-mix').value,
         chorus_on: isPedalOn('chorus-bypass-btn'),
-        
         delay_time: document.getElementById('delay-time').value,
         delay_feedback: document.getElementById('delay-feedback').value,
         delay_mix: document.getElementById('delay-mix').value,
         delay_on: isPedalOn('delay-bypass-btn'),
-        
         reverb_mix: document.getElementById('reverb-mix').value,
         reverb_on: isPedalOn('reverb-bypass-btn')
     };
@@ -136,12 +219,9 @@ export function loadSynthControls(patchState) {
         
         // Pedal Controls
         { id: 'distortion-amount', key: 'distortion_amount' },
-        
-        // NEW: Chorus
         { id: 'chorus-rate', key: 'chorus_rate' },
         { id: 'chorus-depth', key: 'chorus_depth' },
         { id: 'chorus-mix', key: 'chorus_mix' },
-        
         { id: 'delay-time', key: 'delay_time' },
         { id: 'delay-feedback', key: 'delay_feedback' },
         { id: 'delay-mix', key: 'delay_mix' },
@@ -149,10 +229,12 @@ export function loadSynthControls(patchState) {
     ];
 
     controls.forEach(control => {
-        if (patchState[control.key] !== undefined) {
+        // Use a fallback for keys that might not be in older patches (like 'chorus_on')
+        const value = patchState[control.key];
+        if (value !== undefined) {
             const el = document.getElementById(control.id);
             if (el) {
-                el.value = patchState[control.key];
+                el.value = value;
             }
         }
     });
@@ -163,7 +245,7 @@ export function loadSynthControls(patchState) {
     state.baseOctave = parseInt(patchState.baseOctave) || 60;
     
     // Update labels and audio engine
-    updateAllRangeLabels();
+    updateAllRangeLabels(); // This is crucial to make the knobs/sliders update their text
     updateVCF();
     updateDelayParams();
     updateLFO(patchState.lfo_rate, 'rate');
@@ -175,7 +257,6 @@ export function loadSynthControls(patchState) {
     setPedalState('distortion-bypass-btn', patchState.distortion_on);
     toggleDistortion(patchState.distortion_on);
     
-    // NEW: Chorus
     setPedalState('chorus-bypass-btn', patchState.chorus_on);
     toggleChorus(patchState.chorus_on);
 
@@ -185,12 +266,12 @@ export function loadSynthControls(patchState) {
     setPedalState('reverb-bypass-btn', patchState.reverb_on);
     toggleReverb(patchState.reverb_on);
 
-    // Update pedal-dependent params
-    updateChorusRate(patchState.chorus_rate);
-    updateChorusDepth(patchState.chorus_depth);
-    updateChorusMix(patchState.chorus_mix, patchState.chorus_on); // Pass 'on' state
-    updateDelayMix(patchState.delay_mix, patchState.delay_on);
-    updateReverbMix(patchState.reverb_mix, patchState.reverb_on);
+    // Update pedal-dependent params (using fallbacks for safety)
+    updateChorusRate(patchState.chorus_rate || "1.5");
+    updateChorusDepth(patchState.chorus_depth || "0.5");
+    updateChorusMix(patchState.chorus_mix || "0.5", patchState.chorus_on);
+    updateDelayMix(patchState.delay_mix || "0.5", patchState.delay_on);
+    updateReverbMix(patchState.reverb_mix || "0.5", patchState.reverb_on);
 
     // Load scale
     if (patchState.scale_key && _loadScale) {
