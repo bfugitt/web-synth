@@ -3,13 +3,13 @@
  * Handles sequencer logic and transport controls.
  */
 
-import { state, audioCtx } from './state.js';
+// --- THIS IS A CHANGE ---
+import { state, audioCtx } from './state.js'; // <-- Import 'state'
+// --- END CHANGE ---
 import { SCALES, MIDI_NOTE_NAMES } from './constants.js';
 import { startNote, stopNote } from './audioEngine.js';
 import { getArpParams, calculateArpNote, stopArpeggiator, startArpeggiator } from './arpeggiator.js';
 
-// We need functions from other modules,
-// they will be passed in by main.js
 let _loadSynthControls;
 let _createGrid;
 let _setupKeyMappings;
@@ -27,9 +27,6 @@ export function clearGrid() {
     if (_createGrid) _createGrid();
 }
 
-// --- NEW RANDOMIZE FUNCTION ---
-
-// Helper function to shuffle an array
 function shuffleArray(array) {
     for (let i = array.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -41,32 +38,29 @@ export function randomizeSequence() {
     const NUM_ROWS = 8;
     const NUM_STEPS = 16;
     const noteCount = parseInt(document.getElementById('random-amount').value);
+    
+    state.sequence = Array(NUM_ROWS).fill().map(() => Array(NUM_STEPS).fill(0));
 
-    // 1. Create a "pool" of all possible coordinates
     const allSteps = [];
     for (let r = 0; r < NUM_ROWS; r++) {
         for (let s = 0; s < NUM_STEPS; s++) {
             allSteps.push({ r, s });
         }
     }
-
-    // 2. Shuffle the pool
     shuffleArray(allSteps);
 
-    // 3. Clear the existing grid
-    clearGrid();
-
-    // 4. Pick the first 'noteCount' steps from the shuffled pool
     for (let i = 0; i < noteCount; i++) {
         const step = allSteps[i];
         state.sequence[step.r][step.s] = 1;
     }
-
-    // 5. Redraw the grid with the new pattern
-    if (_createGrid) _createGrid();
+    
+    // We'll hold off on randomizing the scale for now
+    // const scaleKeys = Object.keys(SCALES);
+    // const randomKey = scaleKeys[Math.floor(Math.random() * scaleKeys.length)];
+    // document.getElementById('scale-selector').value = randomKey;
+    
+    loadScale(); 
 }
-// --- END NEW FUNCTION ---
-
 
 export function loadScale() {
     const scaleKey = document.getElementById('scale-selector').value;
@@ -89,10 +83,13 @@ export function loadScale() {
     if (_setupKeyMappings) _setupKeyMappings();
 }
 
+
+// --- THIS IS THE NEW, UPDATED runStep() FUNCTION ---
 function runStep() {
     const NUM_STEPS = 16;
     const NUM_ROWS = 8;
     
+    // 1. Check for Song Pattern Change (Unchanged)
     if (state.isSongPlaying && state.currentStep === 0 && state.nextPatternToLoad) {
         if (_loadSynthControls) _loadSynthControls(state.nextPatternToLoad.state);
         state.sequence = state.nextPatternToLoad.sequence.map(row => [...row]);
@@ -108,36 +105,35 @@ function runStep() {
     }
     
     const prevStep = (state.currentStep - 1 + NUM_STEPS) % NUM_STEPS;
-    for (let row = 0; row < NUM_ROWS; row++) {
-        if (state.sequence[row][prevStep]) {
-            const midiNote = state.currentScaleMidiNotes[row];
-            stopNote(midiNote);
-        }
-    }
+    const bpm = parseInt(document.getElementById('bpm-input').value) || 120;
+    const stepDurationMs = (60 / bpm / 4) * 1000;
 
+    // 2. Highlight current step (Unchanged)
     document.querySelectorAll('.step.current').forEach(el => el.classList.remove('current'));
     const currentStepEls = document.querySelectorAll(`.step[data-step="${state.currentStep}"]`);
     currentStepEls.forEach(el => el.classList.add('current'));
 
-    const bpm = parseInt(document.getElementById('bpm-input').value) || 120;
-    const stepDurationMs = (60 / bpm / 4) * 1000;
-    
+    // 3. Check for Arp (Unchanged)
     const { mode: arpMode } = getArpParams();
     let notesToArp = [];
     for (let row = 0; row < NUM_ROWS; row++) {
         if (state.sequence[row][state.currentStep]) {
-            const midiNote = state.currentScaleMidiNotes[row];
-            notesToArp.push(midiNote);
+            notesToArp.push(state.currentScaleMidiNotes[row]);
         }
     }
     notesToArp.sort((a, b) => a - b);
 
-    if (arpMode === 'off' || notesToArp.length === 0) {
-        notesToArp.forEach(midiNote => {
-            startNote(midiNote);
-            setTimeout(() => stopNote(midiNote), stepDurationMs * 0.9);
-        });
-    } else {
+    // 4. Play Logic (This is the new part)
+    if (arpMode !== 'off' && notesToArp.length > 0) {
+        // --- ARP LOGIC (Stays staccato) ---
+        // Stop any tied notes from the previous step
+        for (let row = 0; row < NUM_ROWS; row++) {
+            if (state.sequence[row][prevStep]) {
+                stopNote(state.currentScaleMidiNotes[row]);
+            }
+        }
+        
+        // Run the Arp logic (unchanged)
         const { rateFactor, octaves, chordSequence } = getArpParams();
         const numArpNotesPerStep = rateFactor;
         const arpNoteDurationMs = stepDurationMs / numArpNotesPerStep;
@@ -159,14 +155,44 @@ function runStep() {
                 }
             }, i * arpNoteDurationMs);
         }
+
+    } else {
+        // --- STANDARD SEQUENCER LOGIC (New "Tie" logic) ---
+        // Loop through all 8 rows and decide to start, stop, or tie notes
+        for (let row = 0; row < NUM_ROWS; row++) {
+            const midiNote = state.currentScaleMidiNotes[row];
+            const isPrevOn = state.sequence[row][prevStep];
+            const isCurrOn = state.sequence[row][state.currentStep];
+
+            if (!isPrevOn && isCurrOn) {
+                // Case 1: NOTE START (was OFF, now ON)
+                startNote(midiNote);
+                if (!state.sequencerTieMode) {
+                    // STACCATO MODE: Stop the note just before the next step
+                    setTimeout(() => stopNote(midiNote), stepDurationMs * 0.9);
+                }
+            } else if (isPrevOn && !isCurrOn) {
+                // Case 2: NOTE STOP (was ON, now OFF)
+                if (state.sequencerTieMode) {
+                    // LEGATO MODE: Trigger the release
+                    stopNote(midiNote);
+                }
+                // (In staccato mode, the setTimeout already handled this)
+            }
+            // Case 3: NOTE TIE (was ON, still ON) - Do nothing, let it sustain
+            // Case 4: REST (was OFF, still OFF) - Do nothing
+        }
     }
 
+    // 5. Advance step (Unchanged)
     state.currentStep = (state.currentStep + 1) % NUM_STEPS;
     
     if (state.isSongPlaying && state.currentStep === 0) {
         if (_advanceSongPattern) _advanceSongPattern();
     }
 }
+// --- END NEW runStep() FUNCTION ---
+
 
 let _advanceSongPattern;
 export function setAdvanceSongFn(fn) {
