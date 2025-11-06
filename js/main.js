@@ -3,8 +3,9 @@
  * The central coordinator for the synthesizer.
  */
 
-// Import Core State
-import { audioCtx, audioNodes, state } from './state.js';
+// --- THIS IS A CHANGE ---
+import { audioCtx, audioNodes, state } from './state.js'; // <-- Import 'state'
+// --- END CHANGE ---
 
 // Import All Modules
 import { 
@@ -21,13 +22,7 @@ import {
     initChorus, updateChorusRate, updateChorusDepth, updateChorusMix, toggleChorus
 } from './effects.js';
 
-// --- THIS IS A CHANGE ---
-import { 
-    initPatcher, loadSynthControls, loadPatch, getAllSynthState,
-    randomizePatch // <-- IMPORT OUR NEW FUNCTION
-} from './patch.js';
-// --- END CHANGE ---
-
+import { initPatcher, loadSynthControls, loadPatch, getAllSynthState, randomizePatch } from './patch.js';
 import { initRecorder, startRecording } from './recorder.js';
 import { 
     initSequencer, clearGrid, loadScale, startStopSequencer, 
@@ -218,10 +213,7 @@ document.addEventListener('DOMContentLoaded', () => {
         loadPatch();
         clearGrid();
     };
-    
-    // --- NEW LISTENER ---
     document.getElementById('randomize-patch-btn').onclick = randomizePatch;
-    // --- END NEW LISTENER ---
 
     // -- Export Patch --
     document.getElementById('export-patch-btn').onclick = () => {
@@ -312,6 +304,14 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('random-amount').oninput = (e) => {
         updateRangeLabel(e.target);
     };
+    
+    // --- NEW LISTENER ---
+    document.getElementById('tie-btn').onclick = (e) => {
+        state.sequencerTieMode = !state.sequencerTieMode; // Toggle the state
+        e.target.classList.toggle('active', state.sequencerTieMode);
+        e.target.textContent = state.sequencerTieMode ? 'TIE: ON' : 'TIE: OFF';
+    };
+    // --- END NEW LISTENER ---
     
     // -- Song --
     document.getElementById('save-pattern-btn').onclick = savePattern;
