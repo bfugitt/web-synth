@@ -28,7 +28,8 @@ export const state = {
     currentStep: 0,
     isPlaying: false,
     sequencerInterval: null,
-
+    sequencerTieMode: false, // <-- ADD THIS LINE
+    
     baseOctave: 60,
     vco1Wave: 'sawtooth',
     vco2Wave: 'sawtooth',
