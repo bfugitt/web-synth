@@ -15,11 +15,7 @@ import {
 import { startArpeggiator, stopArpeggiator } from './arpeggiator.js';
 
 import { 
-    initDistortion, 
-    // --- THIS IS THE FIX ---
-    updateDistortionAmount, // <-- This was missing!
-    // --- END FIX ---
-    toggleDistortion,
+    initDistortion, updateDistortionAmount, toggleDistortion,
     toggleDelay, updateDelayMix,
     initReverb, updateReverbMix, toggleReverb,
     initChorus, updateChorusRate, updateChorusDepth, updateChorusMix, toggleChorus
@@ -27,10 +23,14 @@ import {
 
 import { initPatcher, loadSynthControls, loadPatch, getAllSynthState } from './patch.js';
 import { initRecorder, startRecording } from './recorder.js';
+
+// --- THIS IS A CHANGE ---
 import { 
     initSequencer, clearGrid, loadScale, startStopSequencer, 
-    startSequencer, stopSequencer, setAdvanceSongFn, setStopSongFn 
+    startSequencer, stopSequencer, setAdvanceSongFn, setStopSongFn,
+    randomizeSequence // <-- IMPORT OUR NEW FUNCTION
 } from './sequencer.js';
+// --- END CHANGE ---
 
 import { 
     initSong, savePattern, deletePattern, loadPattern, 
@@ -158,9 +158,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('master-volume').oninput = (e) => { audioNodes.masterGainNode.gain.setValueAtTime(e.target.value, audioCtx.currentTime); updateRangeLabel(e.target); };
 
     // -- Pedal Board Controls --
-    // Distortion
     document.getElementById('distortion-amount').oninput = (e) => {
-        updateDistortionAmount(e.target.value); // This will now work
+        updateDistortionAmount(e.target.value);
         updateRangeLabel(e.target);
     };
     document.getElementById('distortion-bypass-btn').onclick = (e) => {
@@ -170,8 +169,6 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.textContent = isActive ? 'ON' : 'OFF';
         toggleDistortion(isActive);
     };
-    
-    // Chorus
     document.getElementById('chorus-rate').oninput = (e) => {
         updateChorusRate(e.target.value);
         updateRangeLabel(e.target, ' Hz');
@@ -191,8 +188,6 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.textContent = isActive ? 'ON' : 'OFF';
         toggleChorus(isActive);
     };
-    
-    // Delay
     document.getElementById('delay-time').oninput = (e) => { updateDelayParams(); updateRangeLabel(e.target, 's'); };
     document.getElementById('delay-feedback').oninput = (e) => { updateDelayParams(); updateRangeLabel(e.target); };
     document.getElementById('delay-mix').oninput = (e) => { updateDelayMix(e.target.value); updateRangeLabel(e.target); };
@@ -203,8 +198,6 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.textContent = isActive ? 'ON' : 'OFF';
         toggleDelay(isActive);
     };
-
-    // Reverb
     document.getElementById('reverb-mix').oninput = (e) => {
         updateReverbMix(e.target.value);
         updateRangeLabel(e.target);
@@ -308,6 +301,13 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('play-btn').onclick = startStopSequencer;
     document.getElementById('stop-btn').onclick = stopSequencer;
     document.getElementById('clear-btn').onclick = clearGrid;
+    
+    // --- NEW LISTENERS ---
+    document.getElementById('randomize-btn').onclick = randomizeSequence;
+    document.getElementById('random-amount').oninput = (e) => {
+        updateRangeLabel(e.target);
+    };
+    // --- END NEW LISTENERS ---
     
     // -- Song --
     document.getElementById('save-pattern-btn').onclick = savePattern;
