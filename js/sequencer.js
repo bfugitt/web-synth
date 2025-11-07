@@ -3,9 +3,7 @@
  * Handles sequencer logic and transport controls.
  */
 
-// --- THIS IS A CHANGE ---
-import { state, audioCtx } from './state.js'; // <-- Import 'state'
-// --- END CHANGE ---
+import { state, audioCtx } from './state.js';
 import { SCALES, MIDI_NOTE_NAMES } from './constants.js';
 import { startNote, stopNote } from './audioEngine.js';
 import { getArpParams, calculateArpNote, stopArpeggiator, startArpeggiator } from './arpeggiator.js';
@@ -54,11 +52,6 @@ export function randomizeSequence() {
         state.sequence[step.r][step.s] = 1;
     }
     
-    // We'll hold off on randomizing the scale for now
-    // const scaleKeys = Object.keys(SCALES);
-    // const randomKey = scaleKeys[Math.floor(Math.random() * scaleKeys.length)];
-    // document.getElementById('scale-selector').value = randomKey;
-    
     loadScale(); 
 }
 
@@ -84,7 +77,7 @@ export function loadScale() {
 }
 
 
-// --- THIS IS THE NEW, UPDATED runStep() FUNCTION ---
+// --- THIS IS THE NEW, CORRECTED runStep() FUNCTION ---
 function runStep() {
     const NUM_STEPS = 16;
     const NUM_ROWS = 8;
@@ -158,29 +151,32 @@ function runStep() {
 
     } else {
         // --- STANDARD SEQUENCER LOGIC (New "Tie" logic) ---
-        // Loop through all 8 rows and decide to start, stop, or tie notes
         for (let row = 0; row < NUM_ROWS; row++) {
             const midiNote = state.currentScaleMidiNotes[row];
             const isPrevOn = state.sequence[row][prevStep];
             const isCurrOn = state.sequence[row][state.currentStep];
 
-            if (!isPrevOn && isCurrOn) {
-                // Case 1: NOTE START (was OFF, now ON)
-                startNote(midiNote);
-                if (!state.sequencerTieMode) {
-                    // STACCATO MODE: Stop the note just before the next step
-                    setTimeout(() => stopNote(midiNote), stepDurationMs * 0.9);
-                }
-            } else if (isPrevOn && !isCurrOn) {
-                // Case 2: NOTE STOP (was ON, now OFF)
-                if (state.sequencerTieMode) {
-                    // LEGATO MODE: Trigger the release
+            if (state.sequencerTieMode) {
+                // --- LEGATO LOGIC ---
+                if (!isPrevOn && isCurrOn) {
+                    // Case 1: NOTE START (was OFF, now ON)
+                    startNote(midiNote);
+                } else if (isPrevOn && !isCurrOn) {
+                    // Case 2: NOTE STOP (was ON, now OFF)
                     stopNote(midiNote);
                 }
-                // (In staccato mode, the setTimeout already handled this)
+                // Case 3 (ON -> ON) & 4 (OFF -> OFF): Do nothing
+            } else {
+                // --- STACCATO LOGIC (THE FIX) ---
+                if (isCurrOn) {
+                    // ANY time the current step is ON, start a new note
+                    // (This re-triggers adjacent notes)
+                    startNote(midiNote);
+                    setTimeout(() => stopNote(midiNote), stepDurationMs * 0.9);
+                }
+                // If isCurrOn is OFF, we don't need to do anything,
+                // because the previous step's setTimeout will stop it.
             }
-            // Case 3: NOTE TIE (was ON, still ON) - Do nothing, let it sustain
-            // Case 4: REST (was OFF, still OFF) - Do nothing
         }
     }
 
