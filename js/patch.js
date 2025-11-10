@@ -44,7 +44,7 @@ function _getRandomChoice(array) {
 // --- END HELPERS ---
 
 
-// --- UPDATED RANDOMIZE PATCH FUNCTION ---
+// --- Randomize Patch Function (Unchanged) ---
 export function randomizePatch() {
     // 1. Core Synth Parameters
     const newPatch = {
@@ -68,18 +68,10 @@ export function randomizePatch() {
 
         lfo_rate: _getRandomValue(2, 8, 0.05).toString(),
         lfo_wave: _getRandomChoice(['sine', 'triangle', 'sawtooth', 'square']),
-
-        // --- THIS IS THE FIX ---
-        // Only turn on LFO modulation some of the time.
-        // 40% chance to modulate the filter
+        
         lfo_vcf_depth: (Math.random() < 0.4) ? _getRandomInt(100, 800).toString() : "0", 
-        
-        // 30% chance to modulate VCO1 pitch
         lfo_vco1_depth: (Math.random() < 0.3) ? _getRandomValue(0.1, 6, 0.1).toString() : "0.0",
-        
-        // 30% chance to modulate VCO2 pitch
         lfo_vco2_depth: (Math.random() < 0.3) ? _getRandomValue(0.1, 6, 0.1).toString() : "0.0",
-        // --- END FIX ---
 
         noise_level: _getRandomValue(0, 0.15).toString(),
         
@@ -114,7 +106,6 @@ export function randomizePatch() {
     // 4. Load the new patch!
     loadSynthControls(newPatch);
 }
-// --- END UPDATED FUNCTION ---
 
 
 function isPedalOn(id) {
@@ -123,8 +114,8 @@ function isPedalOn(id) {
 }
 
 export function getAllSynthState() {
+    // This function is unchanged
     return {
-        // ... (synth properties) ...
         vco1_wave: document.getElementById('vco1-wave').value,
         vco1_range: document.getElementById('vco1-range').value,
         vco1_fine_tune: document.getElementById('vco1-fine-tune').value,
@@ -153,8 +144,6 @@ export function getAllSynthState() {
         bpm: document.getElementById('bpm-input').value,
         scale_key: document.getElementById('scale-selector').value,
         baseOctave: document.getElementById('octave-selector').value,
-
-        // Pedal States
         distortion_amount: document.getElementById('distortion-amount').value,
         distortion_on: isPedalOn('distortion-bypass-btn'),
         chorus_rate: document.getElementById('chorus-rate').value,
@@ -184,8 +173,8 @@ function setPedalState(id, isOn) {
 }
 
 export function loadSynthControls(patchState) {
+    // This function is unchanged...
     const controls = [
-        // ... (synth controls) ...
         { id: 'vco1-wave', key: 'vco1_wave' },
         { id: 'vco1-range', key: 'vco1_range' },
         { id: 'vco1-fine-tune', key: 'vco1_fine_tune' },
@@ -200,11 +189,11 @@ export function loadSynthControls(patchState) {
         { id: 'release', key: 'release' },
         { id: 'cutoff', key: 'cutoff' },
         { id: 'resonance', key: 'resonance' },
-        { id: 'lfo-vcf-depth', key: 'lfo_vcf_depth' },
+        { id: 'lfo_vcf_depth', key: 'lfo_vcf_depth' },
         { id: 'lfo-rate', key: 'lfo_rate' },
         { id: 'lfo-wave', key: 'lfo_wave' },
-        { id: 'lfo-vco1-depth', key: 'lfo_vco1_depth' },
-        { id: 'lfo-vco2-depth', key: 'lfo_vco2_depth' },
+        { id: 'lfo_vco1_depth', key: 'lfo_vco1_depth' },
+        { id: 'lfo_vco2_depth', key: 'lfo_vco2_depth' },
         { id: 'noise-level', key: 'noise_level' },
         { id: 'master-volume', key: 'master_volume' },
         { id: 'arp-mode', key: 'arp_mode' },
@@ -214,8 +203,6 @@ export function loadSynthControls(patchState) {
         { id: 'bpm-input', key: 'bpm' },
         { id: 'scale-selector', key: 'scale_key' },
         { id: 'octave-selector', key: 'baseOctave' },
-        
-        // Pedal Controls
         { id: 'distortion-amount', key: 'distortion_amount' },
         { id: 'chorus-rate', key: 'chorus_rate' },
         { id: 'chorus-depth', key: 'chorus_depth' },
@@ -236,12 +223,10 @@ export function loadSynthControls(patchState) {
         }
     });
 
-    // Update synth state
     state.vco1Wave = patchState.vco1_wave;
     state.vco2Wave = patchState.vco2_wave;
     state.baseOctave = parseInt(patchState.baseOctave) || 60;
     
-    // Update labels and audio engine
     updateAllRangeLabels();
     updateVCF();
     updateDelayParams();
@@ -250,7 +235,6 @@ export function loadSynthControls(patchState) {
     initRealTimeLfo();
     audioNodes.masterGainNode.gain.setValueAtTime(parseFloat(patchState.master_volume), audioCtx.currentTime);
 
-    // Set Pedal On/Off States
     setPedalState('distortion-bypass-btn', patchState.distortion_on);
     toggleDistortion(patchState.distortion_on);
     
@@ -263,12 +247,18 @@ export function loadSynthControls(patchState) {
     setPedalState('reverb-bypass-btn', patchState.reverb_on);
     toggleReverb(patchState.reverb_on);
 
+    // --- THIS IS THE FIX ---
+    // The toggle...() functions already read the sliders and set the mix.
+    // These extra calls were forcing the pedals' audio ON even when
+    // the toggle functions had just turned them OFF.
+    
     // Update pedal-dependent params (using fallbacks for safety)
     updateChorusRate(patchState.chorus_rate || "1.5");
     updateChorusDepth(patchState.chorus_depth || "0.5");
-    updateChorusMix(patchState.chorus_mix || "0.5", patchState.chorus_on);
-    updateDelayMix(patchState.delay_mix || "0.5", patchState.delay_on);
-    updateReverbMix(patchState.reverb_mix || "0.5", patchState.reverb_on);
+    // updateChorusMix(patchState.chorus_mix || "0.5", patchState.chorus_on); // <-- REMOVED
+    // updateDelayMix(patchState.delay_mix || "0.5", patchState.delay_on); // <-- REMOVED
+    // updateReverbMix(patchState.reverb_mix || "0.5", patchState.reverb_on); // <-- REMOVED
+    // --- END FIX ---
 
     // Load scale
     if (patchState.scale_key && _loadScale) {
@@ -278,6 +268,7 @@ export function loadSynthControls(patchState) {
 }
 
 export function loadPatch() {
+    // This function is unchanged
     const patchKey = document.getElementById('patch-selector').value;
     const patch = PATCHES[patchKey];
     if (!patch) return;
