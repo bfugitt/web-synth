@@ -1,7 +1,7 @@
 /*
  * js/recorder.js
  * Handles recording the sequence/song to a WAV file.
- * NOW WITH FULL EFFECTS CHAIN!
+ * FIXED: Explicit Gain Initialization to prevent silence.
  */
 
 import { state, audioCtx } from './state.js';
@@ -27,7 +27,6 @@ function _base64ToArrayBuffer(base64) {
 }
 
 function bufferToWav(monoData, sampleRate) {
-    // This helper function is unchanged
     const numChannels = 1;
     const numSamples = monoData.length;
     const dataLength = numSamples * numChannels * 2;
@@ -62,7 +61,6 @@ function bufferToWav(monoData, sampleRate) {
 }
 
 function createOfflineVoice(context, patchState, midiNote, startTime, duration, destination) {
-    // This helper function is unchanged
     const freq = midiToFreq(midiNote);
     const { attack, decay, sustain } = patchState;
     const tune1Range = parseInt(patchState.vco1_range);
@@ -76,14 +74,18 @@ function createOfflineVoice(context, patchState, midiNote, startTime, duration, 
     const lfoWave = patchState.lfo_wave;
     const lfoVco1Depth = parseFloat(patchState.lfo_vco1_depth) * 100;
     const lfoVco2Depth = parseFloat(patchState.lfo_vco2_depth) * 100;
+    
     const needsLfo = lfoVco1Depth > 0 || lfoVco2Depth > 0;
     const lfoNode = needsLfo ? createLfoNode(context, lfoRate, lfoWave, startTime) : null;
     if(lfoNode) lfoNode.start(startTime);
+    
     const noteGain = context.createGain();
     noteGain.gain.setValueAtTime(0, startTime);
     noteGain.gain.linearRampToValueAtTime(1.0, startTime + parseFloat(attack));
     noteGain.gain.setTargetAtTime(parseFloat(sustain), startTime + parseFloat(attack) + parseFloat(decay), parseFloat(decay) * 0.2);
+    
     const voiceMixer = context.createGain();
+    
     if (vco1Level > 0) {
         const vco1Node = context.createOscillator();
         vco1Node.type = patchState.vco1_wave;
@@ -137,11 +139,14 @@ function createOfflineVoice(context, patchState, midiNote, startTime, duration, 
         noiseNode.start(startTime);
         noiseNode.stop(startTime + duration + parseFloat(patchState.release) + 0.01);
     }
+    
     voiceMixer.connect(noteGain);
     noteGain.connect(destination);
+    
     const releaseTime = parseFloat(patchState.release);
     noteGain.gain.cancelScheduledValues(startTime + duration);
     noteGain.gain.setTargetAtTime(0, startTime + duration, releaseTime * 0.2);
+    
     if (lfoNode) {
         lfoNode.stop(startTime + duration + releaseTime + 0.01);
     }
@@ -160,11 +165,9 @@ export async function startRecording() {
 
     try {
         if (hasSong) {
-            alert("Recording the full song chain...");
             if (state.isSongPlaying && _stopSong) _stopSong();
             patternsToRecord = state.songPatterns;
         } else {
-            alert("No song found. Recording current pattern...");
             const currentPattern = {
                 name: "Current Pattern",
                 state: getAllSynthState(),
@@ -184,26 +187,18 @@ export async function startRecording() {
         });
 
         if (totalTimeSec === 0 || patternsToRecord.length === 0) {
-            recordBtn.disabled = false;
-            document.getElementById('loading-overlay').style.display = 'none';
-            alert("No notes or patterns to record.");
-            return;
+            throw new Error("No notes to record.");
         }
 
         const sampleRate = audioCtx.sampleRate;
         const offlineCtx = new OfflineAudioContext(1, totalTimeSec * sampleRate, sampleRate);
 
-        // --- REBUILD THE *ENTIRE* AUDIO CHAIN OFFLINE ---
-
-        // 1. Master Gain
+        // --- 1. Build Offline Nodes ---
         const masterGainNodeOffline = offlineCtx.createGain();
-        
-        // 2. Synth Mixer & VCF
         const synthOutputMixerOffline = offlineCtx.createGain();
         const vcfNodeOffline = offlineCtx.createBiquadFilter();
         vcfNodeOffline.type = 'lowpass';
 
-        // 3. Distortion Pedal
         const distortionOffline = {
             input: offlineCtx.createGain(),
             waveShaper: offlineCtx.createWaveShaper(),
@@ -213,7 +208,6 @@ export async function startRecording() {
         };
         distortionOffline.waveShaper.oversample = '4x';
 
-        // 4. Chorus Pedal
         const chorusOffline = {
             input: offlineCtx.createGain(),
             delay: offlineCtx.createDelay(0.1),
@@ -224,12 +218,11 @@ export async function startRecording() {
             output: offlineCtx.createGain()
         };
         chorusOffline.lfo.type = 'sine';
-        chorusOffline.delay.delayTime.value = 0.005; // 5ms base
+        chorusOffline.delay.delayTime.value = 0.005;
         chorusOffline.lfo.connect(chorusOffline.depth);
         chorusOffline.depth.connect(chorusOffline.delay.delayTime);
-        chorusOffline.lfo.start();
+        chorusOffline.lfo.start(0);
 
-        // 5. Delay Pedal
         const delayOffline = {
             input: offlineCtx.createGain(),
             delayNode: offlineCtx.createDelay(2.0),
@@ -239,7 +232,6 @@ export async function startRecording() {
             output: offlineCtx.createGain()
         };
 
-        // 6. Reverb Pedal
         const reverbOffline = {
             input: offlineCtx.createGain(),
             convolver: offlineCtx.createConvolver(),
@@ -248,41 +240,57 @@ export async function startRecording() {
             output: offlineCtx.createGain()
         };
 
-        // 7. Load the Reverb IR (must be done before rendering)
-        console.log('Loading Offline Reverb IR...');
-        const irAudioData = _base64ToArrayBuffer(REVERB_IR_BASE64);
-        const reverbBuffer = await offlineCtx.decodeAudioData(irAudioData);
-        reverbOffline.convolver.buffer = reverbBuffer;
-        console.log('Offline Reverb IR loaded.');
+        // --- 2. Initialize Gains Explicitly (This prevents silence) ---
+        // We assume pedals are bypassed (dry=1, wet=0) at time 0.
+        // The loop below will update them if the patch says otherwise.
+        distortionOffline.dry.gain.setValueAtTime(1, 0);
+        distortionOffline.wet.gain.setValueAtTime(0, 0);
+        
+        chorusOffline.dry.gain.setValueAtTime(1, 0);
+        chorusOffline.wet.gain.setValueAtTime(0, 0);
+        
+        delayOffline.dryGain.gain.setValueAtTime(1, 0);
+        delayOffline.wetGain.gain.setValueAtTime(0, 0);
+        
+        reverbOffline.dry.gain.setValueAtTime(1, 0);
+        reverbOffline.wet.gain.setValueAtTime(0, 0);
+        
+        masterGainNodeOffline.gain.setValueAtTime(0.7, 0);
 
-        // --- CONNECT THE OFFLINE CHAIN ---
+        // --- 3. Load Reverb IR ---
+        console.log('Loading Offline Reverb IR...');
+        try {
+            const irAudioData = _base64ToArrayBuffer(REVERB_IR_BASE64);
+            const reverbBuffer = await offlineCtx.decodeAudioData(irAudioData);
+            reverbOffline.convolver.buffer = reverbBuffer;
+        } catch (e) {
+            console.warn("Offline reverb IR failed (continuing without reverb):", e);
+        }
+
+        // --- 4. Connect Chain ---
         synthOutputMixerOffline.connect(vcfNodeOffline);
         vcfNodeOffline.connect(distortionOffline.input);
-        // Dist chain
+        
         distortionOffline.input.connect(distortionOffline.dry).connect(distortionOffline.output);
         distortionOffline.input.connect(distortionOffline.waveShaper).connect(distortionOffline.wet).connect(distortionOffline.output);
-        // Dist -> Chorus
         distortionOffline.output.connect(chorusOffline.input);
-        // Chorus chain
+        
         chorusOffline.input.connect(chorusOffline.dry).connect(chorusOffline.output);
         chorusOffline.input.connect(chorusOffline.delay).connect(chorusOffline.wet).connect(chorusOffline.output);
-        // Chorus -> Delay
         chorusOffline.output.connect(delayOffline.input);
-        // Delay chain
+        
+        delayOffline.input.connect(delayOffline.dryGain).connect(delayOffline.output);
         delayOffline.input.connect(delayOffline.delayNode).connect(delayOffline.feedbackGain).connect(delayOffline.delayNode);
         delayOffline.delayNode.connect(delayOffline.wetGain).connect(delayOffline.output);
-        delayOffline.input.connect(delayOffline.dryGain).connect(delayOffline.output);
-        // Delay -> Reverb
         delayOffline.output.connect(reverbOffline.input);
-        // Reverb chain
+        
         reverbOffline.input.connect(reverbOffline.dry).connect(reverbOffline.output);
         reverbOffline.input.connect(reverbOffline.convolver).connect(reverbOffline.wet).connect(reverbOffline.output);
-        // Reverb -> Master
         reverbOffline.output.connect(masterGainNodeOffline);
-        masterGainNodeOffline.connect(offlineCtx.destination);
         
-        // --- End Chain Rebuild ---
+        masterGainNodeOffline.connect(offlineCtx.destination);
 
+        // --- 5. Schedule Params and Notes ---
         let currentTime = 0;
         const NUM_ROWS = 8;
         
@@ -291,17 +299,14 @@ export async function startRecording() {
             const sequenceToRender = pattern.sequence;
             const timePerStepSec = pattern.timePerStepSec;
             
-            // --- SET ALL AUDIO PARAMS FOR THIS PATTERN ---
             const now = currentTime;
             
-            // Master Volume
+            // -- Master & Filter --
             masterGainNodeOffline.gain.linearRampToValueAtTime(parseFloat(patchState.master_volume), now);
-            
-            // VCF
             vcfNodeOffline.frequency.linearRampToValueAtTime(parseFloat(patchState.cutoff), now);
             vcfNodeOffline.Q.linearRampToValueAtTime(parseFloat(patchState.resonance), now);
             
-            // Distortion
+            // -- Distortion --
             distortionOffline.waveShaper.curve = makeDistortionCurve(parseFloat(patchState.distortion_amount));
             if (patchState.distortion_on) {
                 distortionOffline.wet.gain.linearRampToValueAtTime(1, now);
@@ -311,7 +316,7 @@ export async function startRecording() {
                 distortionOffline.dry.gain.linearRampToValueAtTime(1, now);
             }
 
-            // Chorus
+            // -- Chorus --
             chorusOffline.lfo.frequency.linearRampToValueAtTime(parseFloat(patchState.chorus_rate), now);
             chorusOffline.depth.gain.linearRampToValueAtTime(0.005 * parseFloat(patchState.chorus_depth), now);
             if (patchState.chorus_on) {
@@ -323,7 +328,7 @@ export async function startRecording() {
                 chorusOffline.dry.gain.linearRampToValueAtTime(1, now);
             }
 
-            // Delay
+            // -- Delay --
             delayOffline.delayNode.delayTime.linearRampToValueAtTime(parseFloat(patchState.delay_time), now);
             delayOffline.feedbackGain.gain.linearRampToValueAtTime(parseFloat(patchState.delay_feedback), now);
             if (patchState.delay_on) {
@@ -335,7 +340,7 @@ export async function startRecording() {
                 delayOffline.dryGain.gain.linearRampToValueAtTime(1, now);
             }
 
-            // Reverb
+            // -- Reverb --
             if (patchState.reverb_on) {
                 const mix = parseFloat(patchState.reverb_mix);
                 reverbOffline.wet.gain.linearRampToValueAtTime(mix, now);
@@ -345,7 +350,7 @@ export async function startRecording() {
                 reverbOffline.dry.gain.linearRampToValueAtTime(1, now);
             }
             
-            // --- Schedule Notes ---
+            // -- Notes --
             const scaleKey = patchState.scale_key || 'major';
             const scaleOffsets = SCALES[scaleKey].offsets;
             const baseOctave = parseInt(patchState.baseOctave) || 60;
@@ -355,27 +360,17 @@ export async function startRecording() {
             
             for (let step = 0; step < NUM_STEPS; step++) {
                 const stepTime = currentTime + (step * timePerStepSec);
-                
                 for (let row = 0; row < NUM_ROWS; row++) {
                     if (sequenceToRender[row][step]) {
                         const midiNote = offlineScaleNotes[row];
                         const noteDuration = timePerStepSec * 0.9;
-                        
-                        // Pass the synthOutputMixerOffline as the destination
                         createOfflineVoice(offlineCtx, patchState, midiNote, stepTime, noteDuration, synthOutputMixerOffline);
                     }
                 }
             }
-            
-            currentTime += pattern.duration; // Advance time
+            currentTime += pattern.duration;
         }
 
-        // --- Render and Download ---
-        
-        if (currentTime === 0) {
-            throw new Error("No notes were scheduled for rendering.");
-        }
-        
         console.log('Rendering audio...');
         const renderedBuffer = await offlineCtx.startRendering();
         console.log('Render complete!');
@@ -392,7 +387,7 @@ export async function startRecording() {
 
     } catch (error) {
         console.error("Recording failed:", error);
-        document.getElementById('loading-overlay').innerHTML = '<p>Recording failed. Check console for details.</p><button onclick="document.getElementById(\'loading-overlay\').style.display=\'none\'" style="margin-top: 20px; padding: 10px 20px; background: #f44336; color: white; border: none; border-radius: 4px; border-radius: 8px;">Close</button>';
+        document.getElementById('loading-overlay').innerHTML = `<p>Recording failed: ${error.message}</p><button onclick="document.getElementById('loading-overlay').style.display='none'" style="margin-top: 20px; padding: 10px;">Close</button>`;
     } finally {
         if (document.getElementById('loading-overlay').style.display !== 'none') {
             document.getElementById('loading-overlay').style.display = 'none';
