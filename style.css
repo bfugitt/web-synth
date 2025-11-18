@@ -414,3 +414,35 @@ button:active, button.active {
     width: 100%;
     margin-top: 10px;
 }
+/* --- Song Pattern Display (System 6 Fix) --- */
+#pattern-display {
+    min-height: 40px;
+    border: 1px solid var(--sys-black);
+    background-color: var(--sys-white); /* White background */
+    color: var(--sys-black); /* Black text */
+    padding: 10px;
+    text-align: left;
+    box-shadow: inset 2px 2px 0px var(--sys-gray); /* Inset look */
+}
+#pattern-display p {
+    margin: 0;
+    color: var(--sys-black);
+}
+.pattern-tile {
+    display: inline-block;
+    border: 1px solid var(--sys-black);
+    background: var(--sys-white);
+    padding: 5px 10px;
+    margin: 2px;
+    cursor: pointer;
+    box-shadow: 2px 2px 0px var(--sys-gray);
+}
+.pattern-tile:hover {
+    background: var(--sys-black);
+    color: var(--sys-white);
+}
+.pattern-tile.playing {
+    background: var(--sys-black); /* Inverted when playing */
+    color: var(--sys-white);
+    border: 1px dotted var(--sys-white);
+}
